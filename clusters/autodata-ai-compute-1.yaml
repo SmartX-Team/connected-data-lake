@@ -1,0 +1,115 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-e
+#########################################################
+#   Pipelines
+#########################################################
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pipe-object-detection
+  namespace: tenant-e
+  labels:
+    name: pipe-object-detection
+    dashService: "true"
+    pipeType: object-detection
+    serviceType: pipe
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      name: test-pipe-object-detection
+  template:
+    metadata:
+      labels:
+        name: test-pipe-object-detection
+        dashService: "true"
+        pipeType: object-detection
+        serviceType: pipe
+    spec:
+      affinity:
+        nodeAffinity:
+          # KISS normal control plane nodes should be preferred
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/kiss-ephemeral-control-plane
+                    operator: DoesNotExist
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/kiss
+                    operator: In
+                    values:
+                      - Compute
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: test-pipe-object-detection
+                topologyKey: "kubernetes.io/hostname"
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: controller
+          image: quay.io/ulagbulag/openark:latest-full
+          imagePullPolicy: Always
+          command:
+            - dash-pipe-function-python
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  key: CONSOLE_ACCESS_KEY
+                  name: object-storage-user-0
+            - name: AWS_ENDPOINT_URL
+              value: http://tenant-e
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: CONSOLE_SECRET_KEY
+                  name: object-storage-user-0
+            - name: BUCKET
+              value: dynamic
+            - name: NATS_ADDRS
+              value: nats.dash.svc
+            - name: PIPE_PERSISTENCE
+              value: "true"
+            - name: PIPE_QUEUE_GROUP
+              value: object-detection
+            - name: PIPE_STREAM_IN
+              value: image
+            - name: PIPE_STREAM_OUT
+              value: object-detection
+            - name: PIPE_PYTHON_SCRIPT
+              value: /opt/dash/functions/extern/python/object_detection.py
+            - name: RUST_LOG
+              value: INFO
+          resources:
+            # requests:
+            #   cpu: 30m
+            #   memory: 20Mi
+            limits:
+              # cpu: 100m
+              # memory: 100Mi
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: python-functions
+              mountPath: /opt/dash/functions/extern/python
+      volumes:
+        - name: python-functions
+          configMap:
+            defaultMode: 365 # 0o555
+            name: python-functions

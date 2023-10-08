@@ -1,0 +1,46 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-d
+#########################################################
+#   Owned Model Storages
+#########################################################
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorage
+metadata:
+  name: tenant-d
+  namespace: tenant-d
+  labels:
+    dash.ulagbulag.io/alias: owned-data-pond
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  objectStorage:
+    owned:
+      minioConsoleExternalService:
+        addressPool: kreonet
+        ip: 210.125.85.54
+      minioExternalService:
+        addressPool: kreonet
+        ip: 210.125.85.55
+      resources:
+        requests:
+          storage: 10Ti
+      totalNodes: 1
+      totalVolumesPerNode: 4
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-d
+  namespace: tenant-d
+  labels:
+    dash.ulagbulag.io/alias: owned-data-pond
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: dynamic
+  storage:
+    owned:
+      target: tenant-d

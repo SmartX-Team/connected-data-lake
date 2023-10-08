@@ -1,0 +1,320 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: object-storage-user-0
+  namespace: __NAMESPACE__
+immutable: true
+type: Opaque
+# FIXME: change your own secret!
+data:
+  CONSOLE_ACCESS_KEY: T0JKSXJaUzNPRnpmSEpWZQ==
+  CONSOLE_SECRET_KEY: b3hOVkpibWd4WFpjSGt5NlNrNlF6aTZzUVRxVmRYeEc=
+#########################################################
+#   Models
+#########################################################
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: Model
+metadata:
+  name: dynamic
+  namespace: __NAMESPACE__
+spec:
+  dynamic: {}
+#########################################################
+#   Model Storages
+#########################################################
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorage
+metadata:
+  name: tenant-a
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-a
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  objectStorage:
+    borrowed:
+      endpoint: http://210.125.84.97
+      secretRef:
+        mapAccessKey: CONSOLE_ACCESS_KEY
+        mapSecretKey: CONSOLE_SECRET_KEY
+        name: object-storage-user-0
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorage
+metadata:
+  name: tenant-b
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-b
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  objectStorage:
+    borrowed:
+      endpoint: http://210.125.84.101
+      secretRef:
+        mapAccessKey: CONSOLE_ACCESS_KEY
+        mapSecretKey: CONSOLE_SECRET_KEY
+        name: object-storage-user-0
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorage
+metadata:
+  name: tenant-c
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-c
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  objectStorage:
+    borrowed:
+      endpoint: http://210.125.84.105
+      secretRef:
+        mapAccessKey: CONSOLE_ACCESS_KEY
+        mapSecretKey: CONSOLE_SECRET_KEY
+        name: object-storage-user-0
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorage
+metadata:
+  name: tenant-d
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-d
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  objectStorage:
+    borrowed:
+      endpoint: http://210.125.85.55
+      secretRef:
+        mapAccessKey: CONSOLE_ACCESS_KEY
+        mapSecretKey: CONSOLE_SECRET_KEY
+        name: object-storage-user-0
+#########################################################
+#   Models Storage Bindings
+#########################################################
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-a
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-a
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: dynamic
+  storage:
+    cloned:
+      source: tenant-a
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-b
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-b
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: dynamic
+  storage:
+    cloned:
+      source: tenant-b
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-c
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-c
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: dynamic
+  storage:
+    cloned:
+      source: tenant-c
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-d
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-d
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: dynamic
+  storage:
+    cloned:
+      source: tenant-d
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+#########################################################
+#   External Endpoints
+#########################################################
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: tenant-a
+  namespace: __NAMESPACE__
+subsets:
+  - addresses:
+      - ip: 210.125.84.97
+    ports:
+      - name: http
+        port: 80
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: tenant-b
+  namespace: __NAMESPACE__
+subsets:
+  - addresses:
+      - ip: 210.125.84.101
+    ports:
+      - name: http
+        port: 80
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: tenant-c
+  namespace: __NAMESPACE__
+subsets:
+  - addresses:
+      - ip: 210.125.84.105
+    ports:
+      - name: http
+        port: 80
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: tenant-d
+  namespace: __NAMESPACE__
+subsets:
+  - addresses:
+      - ip: 210.125.85.55
+    ports:
+      - name: http
+        port: 80
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: tenant-all
+  namespace: __NAMESPACE__
+subsets:
+  - addresses:
+      - ip: 210.125.84.97
+      - ip: 210.125.84.101
+      - ip: 210.125.84.105
+      - ip: 210.125.85.55
+    ports:
+      - name: http
+        port: 80
+#########################################################
+#   Headless External Services
+#########################################################
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenant-a
+  namespace: __NAMESPACE__
+spec:
+  clusterIP: None
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenant-b
+  namespace: __NAMESPACE__
+spec:
+  clusterIP: None
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenant-c
+  namespace: __NAMESPACE__
+spec:
+  clusterIP: None
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenant-d
+  namespace: __NAMESPACE__
+spec:
+  clusterIP: None
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenant-all
+  namespace: __NAMESPACE__
+spec:
+  clusterIP: None
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
