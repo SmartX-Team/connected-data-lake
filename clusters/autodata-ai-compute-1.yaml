@@ -19,7 +19,7 @@ metadata:
     pipeType: object-detection
     serviceType: pipe
 spec:
-  replicas: 1
+  replicas: 2
   strategy:
     rollingUpdate:
       maxUnavailable: 1
