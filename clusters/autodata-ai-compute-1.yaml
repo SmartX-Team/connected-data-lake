@@ -62,7 +62,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: controller
-          image: quay.io/ulagbulag/openark:latest-full
+          image: quay.io/ulagbulag/openark:latest-arm64-full
           imagePullPolicy: Always
           command:
             - dash-pipe-function-python
