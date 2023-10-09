@@ -31,6 +31,18 @@ for cluster_name in $("$(dirname "$0")/ceph-ls.sh"); do
             grep -Po ' +kubernetes \K[\w\.\_\-]+'
     )"
 
+    # Do not use PVC if no ceph cluster
+    if
+        ! kubectl \
+            --context "${cluster_name}" \
+            get namespace 'csi-rook-ceph' \
+            >/dev/null 2>/dev/null
+    then
+        export NATS_ENABLE_PVC="false"
+    else
+        export NATS_ENABLE_PVC="true"
+    fi
+
     # Install NATS
     pushd "${OPENARK_HOME}/templates/dash/nats/"
     env CLUSTER_NAME="${CLUSTER_NAME}" ./install.sh
