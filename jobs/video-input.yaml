@@ -1,0 +1,93 @@
+#########################################################
+#   Pipelines
+#########################################################
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pipe-video-input
+  namespace: tenant-e
+  labels:
+    name: pipe-video-input
+    dashService: "true"
+    pipeType: video-input
+    serviceType: pipe
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 30
+  template:
+    metadata:
+      labels:
+        name: test-pipe-video-input
+        dashService: "true"
+        pipeType: video-input
+        serviceType: pipe
+    spec:
+      affinity:
+        nodeAffinity:
+          # KISS normal control plane nodes should be preferred
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/kiss-ephemeral-control-plane
+                    operator: DoesNotExist
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/kiss
+                    operator: In
+                    values:
+                      - Compute
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: test-pipe-video-input
+                topologyKey: "kubernetes.io/hostname"
+      restartPolicy: Never
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: controller
+          image: quay.io/ulagbulag/openark:latest-arm64-full
+          imagePullPolicy: Always
+          command:
+            - dash-pipe-connector-storage
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  key: CONSOLE_ACCESS_KEY
+                  name: object-storage-user-0
+            - name: AWS_ENDPOINT_URL
+              value: http://tenant-e
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: CONSOLE_SECRET_KEY
+                  name: object-storage-user-0
+              # TODO: FIXME: PIPE_STREAM_IN/PIPE_STREAM_OUT 별로 BUCKET 네임 구성하기 ?
+              # TODO: FIXME: PIPE_STREAM_IN/PIPE_STREAM_OUT 과 Stream Group 과의 연관성 ?
+            - name: BUCKET
+              value: dynamic
+            - name: NATS_ADDRS
+              value: nats.dash.svc
+            - name: PIPE_PERSISTENCE
+              value: "true"
+            - name: PIPE_STREAM_OUT
+              value: image
+            - name: RUST_LOG
+              value: INFO
+          # resources:
+          #   requests:
+          #     cpu: 30m
+          #     memory: 20Mi
+          #   limits:
+          #     cpu: 100m
+          #     memory: 100Mi
