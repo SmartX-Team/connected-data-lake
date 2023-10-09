@@ -9,6 +9,7 @@ metadata:
   namespace: tenant-e
   labels:
     name: pipe-video-input
+    nats_cluster: nats
     dashService: "true"
     pipeType: video-input
     serviceType: pipe
@@ -51,8 +52,9 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      serviceAccount: nats-admin-user
       containers:
-        - name: controller
+        - name: pipe
           image: quay.io/ulagbulag/openark:latest-arm64-full
           imagePullPolicy: Always
           command:
@@ -72,12 +74,14 @@ spec:
                 secretKeyRef:
                   key: CONSOLE_SECRET_KEY
                   name: object-storage-user-0
-              # TODO: FIXME: PIPE_STREAM_IN/PIPE_STREAM_OUT 별로 BUCKET 네임 구성하기 ?
-              # TODO: FIXME: PIPE_STREAM_IN/PIPE_STREAM_OUT 과 Stream Group 과의 연관성 ?
             - name: BUCKET
               value: dynamic
+            - name: NATS_ACCOUNT
+              value: nats-admin-user
             - name: NATS_ADDRS
-              value: nats.dash.svc
+              value: nats
+            - name: NATS_PASSWORD_PATH
+              value: /var/run/secrets/nats.io/token
             - name: PIPE_PERSISTENCE
               value: "true"
             - name: PIPE_STREAM_OUT
@@ -91,3 +95,15 @@ spec:
           #   limits:
           #     cpu: 100m
           #     memory: 100Mi
+          volumeMounts:
+            - name: nats-token
+              mountPath: /var/run/secrets/nats.io
+      volumes:
+        - name: nats-token
+          projected:
+            sources:
+              - secret:
+                  name: nats-admin-user-nats-bound-token
+                  items:
+                    - key: token
+                      path: token

@@ -11,6 +11,159 @@ data:
   CONSOLE_ACCESS_KEY: T0JKSXJaUzNPRnpmSEpWZQ==
   CONSOLE_SECRET_KEY: b3hOVkpibWd4WFpjSGt5NlNrNlF6aTZzUVRxVmRYeEc=
 #########################################################
+#   NATS Operator
+#########################################################
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: nats-ca
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nats-ca
+  namespace: __NAMESPACE__
+spec:
+  commonName: nats-ca
+  duration: 8736h # 1 year
+  isCA: true
+  issuerRef:
+    name: nats-ca
+    kind: ClusterIssuer
+  renewBefore: 240h # 10 days
+  secretName: nats-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nats-server-tls
+  namespace: __NAMESPACE__
+spec:
+  commonName: nats.__NAMESPACE__.svc
+  dnsNames:
+    - nats
+    - nats.__NAMESPACE__.svc
+  duration: 2160h # 90 days
+  issuerRef:
+    name: nats-ca
+    kind: Issuer
+  renewBefore: 240h # 10 days
+  secretName: nats-server-tls
+  usages:
+    - key encipherment
+    - server auth
+    - signing
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nats-routes-tls
+  namespace: __NAMESPACE__
+spec:
+  commonName: "*.nats-mgmt.__NAMESPACE__.svc"
+  dnsNames:
+    - "*.nats-mgmt"
+    - "*.nats-mgmt.__NAMESPACE__.svc"
+  duration: 2160h # 90 days
+  issuerRef:
+    name: nats-ca
+    kind: Issuer
+  renewBefore: 240h # 10 days
+  secretName: nats-routes-tls
+  usages:
+    - client auth # included because routes mutually verify each other
+    - key encipherment
+    - server auth
+    - signing
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: nats-ca
+  namespace: __NAMESPACE__
+spec:
+  ca:
+    secretName: nats-ca
+---
+apiVersion: nats.io/v1alpha2
+kind: NatsCluster
+metadata:
+  name: nats
+  namespace: __NAMESPACE__
+spec:
+  auth:
+    # NOTE: Only supported in Kubernetes v1.12+ clusters having the "TokenRequest" API enabled.
+    enableServiceAccounts: true # NOTE: not supported in aarch64 yet
+
+  pod:
+    # NOTE: Only supported in Kubernetes v1.12+.
+    enableConfigReload: true # NOTE: not supported in aarch64 yet
+
+    # EnableMetrics attaches a sidecar to each NATS Server
+    # that will export prometheus metrics.
+    enableMetrics: true
+
+    # NodeSelector specifies a map of key-value pairs.
+    # For the pod to be eligible to run on a node,
+    # the node must have each of the indicated key-value pairs as labels.
+    nodeSelector:
+      kubernetes.io/arch: amd64
+
+  # Number of nodes in the cluster
+  size: 1
+
+  # tls:
+  #   # Certificates to secure the NATS client connections:
+  #   serverSecret: nats-server-tls
+  #   # Name of the CA in serverSecret
+  #   serverSecretCAFileName: ca.crt
+  #   # Name of the key in serverSecret
+  #   serverSecretKeyFileName: tls.key
+  #   # Name of the certificate in serverSecret
+  #   serverSecretCertFileName: tls.crt
+
+  #   # Certificates to secure the routes.
+  #   routesSecret: nats-routes-tls
+  #   # Name of the CA in routesSecret
+  #   routesSecretCAFileName: ca.crt
+  #   # Name of the key in routesSecret
+  #   routesSecretKeyFileName: tls.key
+  #   # Name of the certificate in routesSecret
+  #   routesSecretCertFileName: tls.crt
+#########################################################
+#   NATS Client
+#########################################################
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nats-admin-user
+  namespace: __NAMESPACE__
+---
+apiVersion: nats.io/v1alpha2
+kind: NatsServiceRole
+metadata:
+  name: nats-admin-user
+  namespace: __NAMESPACE__
+  # Specifies which NATS cluster will be mapping this account.
+  labels:
+    nats_cluster: nats
+spec:
+  permissions:
+    publish:
+      - "image"
+      - "image>"
+      - "object-detection"
+      - "object-detection>"
+    subscribe:
+      - "image"
+      - "image>"
+      - "object-detection"
+      - "object-detection>"
+#########################################################
 #   Models
 #########################################################
 ---

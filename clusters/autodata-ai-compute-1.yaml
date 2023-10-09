@@ -14,11 +14,12 @@ metadata:
   namespace: tenant-e
   labels:
     name: pipe-object-detection
+    nats_cluster: nats
     dashService: "true"
     pipeType: object-detection
     serviceType: pipe
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     rollingUpdate:
       maxUnavailable: 1
@@ -60,8 +61,9 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      serviceAccount: nats-admin-user
       containers:
-        - name: controller
+        - name: pipe
           image: quay.io/ulagbulag/openark:latest-arm64-full
           imagePullPolicy: Always
           command:
@@ -83,8 +85,12 @@ spec:
                   name: object-storage-user-0
             - name: BUCKET
               value: dynamic
+            - name: NATS_ACCOUNT
+              value: nats-admin-user
             - name: NATS_ADDRS
-              value: nats.dash.svc
+              value: nats
+            - name: NATS_PASSWORD_PATH
+              value: /var/run/secrets/nats.io/token
             - name: PIPE_PERSISTENCE
               value: "true"
             - name: PIPE_QUEUE_GROUP
@@ -106,9 +112,19 @@ spec:
               # memory: 100Mi
               nvidia.com/gpu: "1"
           volumeMounts:
+            - name: nats-token
+              mountPath: /var/run/secrets/nats.io
             - name: python-functions
               mountPath: /opt/dash/functions/extern/python
       volumes:
+        - name: nats-token
+          projected:
+            sources:
+              - secret:
+                  name: nats-admin-user-nats-bound-token
+                  items:
+                    - key: token
+                      path: token
         - name: python-functions
           configMap:
             defaultMode: 365 # 0o555

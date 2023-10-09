@@ -1,0 +1,32 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nats-ops
+  namespace: tenant-e
+  labels:
+    nats_cluster: nats
+    serviceType: pipe
+spec:
+  containers:
+    - name: nats-ops
+      command:
+        - sleep
+        - "1000000000"
+      image: docker.io/wallyqs/nats-ops:latest
+      volumeMounts:
+        - name: nats-token
+          mountPath: /var/run/secrets/nats.io
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  restartPolicy: Never
+  serviceAccount: nats-admin-user
+  volumes:
+    - name: nats-token
+      projected:
+        sources:
+          - secret:
+              name: nats-admin-user-nats-bound-token
+              items:
+                - key: token
+                  path: token

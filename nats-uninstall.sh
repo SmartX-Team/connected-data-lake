@@ -44,11 +44,8 @@ for cluster_name in $("$(dirname "$0")/ceph-ls.sh"); do
     fi
 
     # Uninstall NATS
-    helm uninstall --namespace 'dash' nats || true
-    kubectl \
-        --context "${cluster_name}" \
-        --namespace 'dash' \
-        delete pvc 'nats-js-nats-0' || true
+    helm uninstall --namespace 'nats-io' nats || true
+    kubectl delete namespace 'nats-io'
 done
 
 # Cleanup
