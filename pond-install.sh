@@ -31,10 +31,13 @@ for cluster_name in $("$(dirname "$0")/ceph-ls.sh"); do
     fi
 
     # Install Data Pond
+    cat "$(pwd)/clusters/_common_pre.yaml" |
+        sed "s/__NAMESPACE__/${cluster_namespace}/g" |
+        kubectl create -f - || true
     kubectl apply \
         --context "${cluster_name}" \
         --filename "$(pwd)/clusters/${cluster_name}.yaml"
-    cat "$(pwd)/clusters/_common.yaml" |
+    cat "$(pwd)/clusters/_common_post.yaml" |
         sed "s/__NAMESPACE__/${cluster_namespace}/g" |
         kubectl create -f - || true
 

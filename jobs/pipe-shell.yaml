@@ -57,7 +57,7 @@ spec:
               key: CONSOLE_ACCESS_KEY
               name: object-storage-user-0
         - name: AWS_ENDPOINT_URL
-          value: http://tenant-e
+          value: http://tenant-all
         - name: AWS_REGION
           value: us-east-1
         - name: AWS_SECRET_ACCESS_KEY
@@ -65,10 +65,6 @@ spec:
             secretKeyRef:
               key: CONSOLE_SECRET_KEY
               name: object-storage-user-0
-        # TODO: FIXME: PIPE_STREAM_IN/PIPE_STREAM_OUT 별로 BUCKET 네임 구성하기 ?
-        # TODO: FIXME: PIPE_STREAM_IN/PIPE_STREAM_OUT 과 Stream Group 과의 연관성 ?
-        - name: BUCKET
-          value: dynamic
         - name: NATS_ACCOUNT
           value: nats-admin-user
         - name: NATS_ADDRS
@@ -78,7 +74,7 @@ spec:
           value: /var/run/secrets/nats.io/token
         - name: PIPE_PERSISTENCE
           value: "true"
-        - name: PIPE_STREAM_OUT
+        - name: PIPE_MODEL_OUT
           value: image
         - name: RUST_LOG
           value: INFO

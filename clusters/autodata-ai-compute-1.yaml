@@ -75,7 +75,7 @@ spec:
                   key: CONSOLE_ACCESS_KEY
                   name: object-storage-user-0
             - name: AWS_ENDPOINT_URL
-              value: http://tenant-e
+              value: http://tenant-all
             - name: AWS_REGION
               value: us-east-1
             - name: AWS_SECRET_ACCESS_KEY
@@ -83,8 +83,6 @@ spec:
                 secretKeyRef:
                   key: CONSOLE_SECRET_KEY
                   name: object-storage-user-0
-            - name: BUCKET
-              value: dynamic
             - name: NATS_ACCOUNT
               value: nats-admin-user
             - name: NATS_ADDRS
@@ -95,9 +93,9 @@ spec:
               value: "true"
             - name: PIPE_QUEUE_GROUP
               value: object-detection
-            - name: PIPE_STREAM_IN
+            - name: PIPE_MODEL_IN
               value: image
-            - name: PIPE_STREAM_OUT
+            - name: PIPE_MODEL_OUT
               value: object-detection
             - name: PIPE_PYTHON_SCRIPT
               value: /opt/dash/functions/extern/python/object_detection.py
