@@ -92,7 +92,7 @@ spec:
             - name: PIPE_PERSISTENCE
               value: "true"
             - name: PIPE_QUEUE_GROUP
-              value: object-detection
+              value: "true"
             - name: PIPE_MODEL_IN
               value: image
             - name: PIPE_MODEL_OUT
