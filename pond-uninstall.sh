@@ -22,12 +22,6 @@ for cluster_name in $("$(dirname "$0")/ceph-ls.sh"); do
     kubectl delete \
         --context "${cluster_name}" \
         --filename "$(pwd)/clusters/${cluster_name}.yaml" || true
-    kubectl delete \
-        --context "${cluster_name}" \
-        --filename "$(pwd)/clusters/_binding.yaml" || true
-    kubectl delete \
-        --context "${cluster_name}" \
-        --filename "$(pwd)/clusters/_common.yaml" || true
 done
 
 # Cleanup
