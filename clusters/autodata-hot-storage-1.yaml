@@ -29,18 +29,39 @@ spec:
           storage: 10Ti
       totalNodes: 1
       totalVolumesPerNode: 4
+#########################################################
+#   Models Storage Bindings - Image
+#########################################################
 ---
 apiVersion: dash.ulagbulag.io/v1alpha1
 kind: ModelStorageBinding
 metadata:
-  name: tenant-b
+  name: tenant-b-image
   namespace: tenant-b
   labels:
     dash.ulagbulag.io/alias: owned-data-pond
     dash.ulagbulag.io/kind: connected-data-lake
 spec:
   deletionPolicy: Delete
-  model: dynamic
+  model: image
+  storage:
+    owned:
+      target: tenant-b
+#########################################################
+#   Models Storage Bindings - Object Detection
+#########################################################
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-b-object-detection
+  namespace: tenant-b
+  labels:
+    dash.ulagbulag.io/alias: owned-data-pond
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: object-detection
   storage:
     owned:
       target: tenant-b

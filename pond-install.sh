@@ -38,6 +38,18 @@ for cluster_name in $("$(dirname "$0")/ceph-ls.sh"); do
         sed "s/__NAMESPACE__/${cluster_namespace}/g" |
         kubectl create -f - || true
 
+    # Bind models to each owned storage
+    if
+        kubectl \
+            --context "${cluster_name}" \
+            get namespace 'csi-rook-ceph' \
+            >/dev/null 2>/dev/null
+    then
+        cat "$(pwd)/clusters/_binding.yaml" |
+            sed "s/__NAMESPACE__/${cluster_namespace}/g" |
+            kubectl create -f - || true
+    fi
+
     # Install Data Pond Functions
     for function_set in $(ls "$(pwd)/functions"); do
         kubectl create configmap "${function_set}-functions" \

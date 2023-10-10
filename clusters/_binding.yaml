@@ -1,0 +1,166 @@
+#########################################################
+#   Models Storage Bindings - Image
+#########################################################
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-a-image
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-a
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: image
+  storage:
+    cloned:
+      source: tenant-a
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-b-image
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-b
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: image
+  storage:
+    cloned:
+      source: tenant-b
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-c-image
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-c
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: image
+  storage:
+    cloned:
+      source: tenant-c
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-d-image
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-d
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: image
+  storage:
+    cloned:
+      source: tenant-d
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+#########################################################
+#   Models Storage Bindings - Object Detection
+#########################################################
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-a-object-detection
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-a
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: object-detection
+  storage:
+    cloned:
+      source: tenant-a
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-b-object-detection
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-b
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: object-detection
+  storage:
+    cloned:
+      source: tenant-b
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-c-object-detection
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-c
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: object-detection
+  storage:
+    cloned:
+      source: tenant-c
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: tenant-d-object-detection
+  namespace: __NAMESPACE__
+  labels:
+    dash.ulagbulag.io/alias: borrowed-data-pond
+    dash.ulagbulag.io/borrowed-from: tenant-d
+    dash.ulagbulag.io/kind: connected-data-lake
+spec:
+  deletionPolicy: Delete
+  model: object-detection
+  storage:
+    cloned:
+      source: tenant-d
+      target: __NAMESPACE__
+      syncPolicy:
+        pull: Always
+        push: Always
