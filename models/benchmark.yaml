@@ -1,0 +1,46 @@
+#########################################################
+#   Models
+#########################################################
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: Model
+metadata:
+  name: performance-test-src
+  namespace: tenant-e
+spec:
+  dynamic: {}
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: Model
+metadata:
+  name: performance-test-dst
+  namespace: tenant-e
+spec:
+  dynamic: {}
+#########################################################
+#   Models Storage Bindings
+#########################################################
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: performance-test-src
+  namespace: tenant-e
+spec:
+  deletionPolicy: Delete
+  model: performance-test-src
+  storage:
+    owned:
+      target: tenant-c
+---
+apiVersion: dash.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: performance-test-dst
+  namespace: tenant-e
+spec:
+  deletionPolicy: Delete
+  model: performance-test-dst
+  storage:
+    owned:
+      target: tenant-c

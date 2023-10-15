@@ -146,15 +146,19 @@ spec:
       - "image.>"
       - "object-detection"
       - "object-detection.>"
-      - "performance-test"
-      - "performance-test.>"
+      - "performance-test-dst"
+      - "performance-test-dst.>"
+      - "performance-test-src"
+      - "performance-test-src.>"
     subscribe:
       - "image"
       - "image.>"
       - "object-detection"
       - "object-detection.>"
-      - "performance-test"
-      - "performance-test.>"
+      - "performance-test-dst"
+      - "performance-test-dst.>"
+      - "performance-test-src"
+      - "performance-test-src.>"
 #########################################################
 #   Models
 #########################################################
