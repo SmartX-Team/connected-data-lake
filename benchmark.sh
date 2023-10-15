@@ -107,6 +107,11 @@ for use_receiver in $(yq -r '.useReceiver[]' ./benchmark/config.yaml); do
         for messenger_type in $(yq -r '.messengerTypes[]' ./benchmark/config.yaml); do
             for payload_size in $(yq -r '.payloadSize[]' ./benchmark/config.yaml); do
                 for total_messages in $(yq -r '.totalMessages[]' ./benchmark/config.yaml); do
+                    # Resize total messages if payload size is given
+                    if [ "x${payload_size}" != 'x0' ]; then
+                        total_messages='10K'
+                    fi
+
                     # Show current metrics
                     echo -e " ${use_receiver}\t   ${data_size}\t     ${messenger_type}\t   ${payload_size}\t\t${total_messages}"
 

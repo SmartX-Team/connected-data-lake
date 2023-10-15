@@ -14,15 +14,15 @@ messengerTypes:
   - Nats
 
 payloadSize:
-  # - "0"
-  # - "4"
-  # - "16"
-  # - "64"
-  # - "256"
-  # - 1K
-  # - 4K
-  # - 16K
-  # - 128K
+  - "0"
+  - "4"
+  - "16"
+  - "64"
+  - "256"
+  - 1K
+  - 4K
+  - 16K
+  - 128K
   - 1M
   - 4M
   - 16M
@@ -31,8 +31,7 @@ payloadSize:
   - 1G
 
 totalMessages:
-  - 10K
-  # - 1M
+  - 1M
 
 useReceiver:
   - false

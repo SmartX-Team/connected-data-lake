@@ -70,7 +70,7 @@ spec:
                   key: CONSOLE_ACCESS_KEY
                   name: object-storage-user-0
             - name: AWS_ENDPOINT_URL
-              value: http://tenant-c
+              value: http://tenant-b
             - name: AWS_REGION
               value: us-east-1
             - name: AWS_SECRET_ACCESS_KEY
