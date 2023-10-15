@@ -31,7 +31,7 @@ spec:
   model: performance-test-src
   storage:
     owned:
-      target: tenant-c
+      target: tenant-b
 ---
 apiVersion: dash.ulagbulag.io/v1alpha1
 kind: ModelStorageBinding
@@ -43,4 +43,4 @@ spec:
   model: performance-test-dst
   storage:
     owned:
-      target: tenant-c
+      target: tenant-b

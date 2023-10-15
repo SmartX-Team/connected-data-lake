@@ -1,0 +1,38 @@
+---
+dataSize:
+  - "4"
+  - "16"
+  - "64"
+  - "256"
+  - 1K
+  - 4K
+  - 16K
+  - 128K
+  - 1M
+
+messengerTypes:
+  - Nats
+
+payloadSize:
+  # - "0"
+  # - "4"
+  # - "16"
+  # - "64"
+  # - "256"
+  # - 1K
+  # - 4K
+  # - 16K
+  # - 128K
+  - 1M
+  - 4M
+  - 16M
+  - 64M
+  - 256M
+  - 1G
+
+totalMessages:
+  - 10K
+  # - 1M
+
+useReceiver:
+  - false

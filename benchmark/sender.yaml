@@ -1,0 +1,118 @@
+#########################################################
+#   Sender
+#########################################################
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: benchmark-messengers-nats-sender
+  namespace: tenant-e
+  labels:
+    name: benchmark-messengers-nats-sender
+    nats_cluster: nats
+    dashService: "true"
+    pipeType: messengers-nats-sender
+    serviceType: pipe
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 30
+  template:
+    metadata:
+      labels:
+        name: benchmark-messengers-nats-sender
+        dashService: "true"
+        pipeType: messengers-nats-sender
+        serviceType: pipe
+    spec:
+      affinity:
+        nodeAffinity:
+          # KISS normal control plane nodes should be preferred
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/kiss-ephemeral-control-plane
+                    operator: DoesNotExist
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - arm64
+                  - key: node-role.kubernetes.io/kiss
+                    operator: In
+                    values:
+                      - Compute
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: benchmark-messengers-nats-sender
+                topologyKey: "kubernetes.io/hostname"
+      restartPolicy: Never
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccount: nats-admin-user
+      containers:
+        - name: pipe
+          image: quay.io/ulagbulag/openark:latest-full
+          imagePullPolicy: Always
+          command:
+            - dash-pipe-function-performance-test
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  key: CONSOLE_ACCESS_KEY
+                  name: object-storage-user-0
+            - name: AWS_ENDPOINT_URL
+              value: http://tenant-b
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: CONSOLE_SECRET_KEY
+                  name: object-storage-user-0
+            - name: NATS_ACCOUNT
+              value: nats-admin-user
+            - name: NATS_ADDRS
+              value: nats
+            - name: NATS_PASSWORD_PATH
+              value: /var/run/secrets/nats.io/token
+            - name: PIPE_DEFAULT_MESSENGER
+              value: Nats
+            - name: PIPE_MAX_TASKS
+              value: "32"
+            ###############################################
+            - name: PIPE_PERFORMANCE_TEST_DATA_SIZE
+              value: "1M"
+            - name: PIPE_PERFORMANCE_TEST_PAYLOAD_SIZE
+              value: "0"
+            - name: PIPE_PERFORMANCE_TEST_QUIET
+              value: "false"
+            - name: PIPE_PERFORMANCE_TEST_TOTAL_MESSAGES
+              value: "1M"
+            ###############################################
+            - name: PIPE_PERSISTENCE
+              value: "false"
+            - name: PIPE_MODEL_OUT
+              value: performance-test-src
+            - name: RUST_LOG
+              value: INFO
+          volumeMounts:
+            - name: nats-token
+              mountPath: /var/run/secrets/nats.io
+      volumes:
+        - name: nats-token
+          projected:
+            sources:
+              - secret:
+                  name: nats-admin-user-nats-bound-token
+                  items:
+                    - key: token
+                      path: token
