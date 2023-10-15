@@ -146,11 +146,15 @@ spec:
       - "image.>"
       - "object-detection"
       - "object-detection.>"
+      - "performance-test"
+      - "performance-test.>"
     subscribe:
       - "image"
       - "image.>"
       - "object-detection"
       - "object-detection.>"
+      - "performance-test"
+      - "performance-test.>"
 #########################################################
 #   Models
 #########################################################
