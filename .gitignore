@@ -1,2 +1,10 @@
-/.hypothesis
-/.vscode
+# Dev
+/**/.env
+
+# Editor
+/.hypothesis/
+/.vscode/
+**/tmp/
+
+# Temporary
+/*.csv

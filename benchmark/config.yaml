@@ -27,8 +27,6 @@ payloadSize:
   - 4M
   - 16M
   - 64M
-  - 256M
-  - 1G
 
 totalMessages:
   - 1M
