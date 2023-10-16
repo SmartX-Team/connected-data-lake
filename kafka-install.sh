@@ -11,20 +11,10 @@ set -e -o pipefail
 ###########################################################
 
 # Configure default environment variables
-HELM_CHART_DEFAULT="https://strimzi.io/charts"
-NAMESPACE_DEFAULT="strimzi-kafka-operator"
+OPENARK_HOME_DEFAULT="${HOME}/Library/ipis-dev-env/netai-cloud"
 
 # Set environment variables
-HELM_CHART="${HELM_CHART:-$HELM_CHART_DEFAULT}"
-NAMESPACE="${NAMESPACE:-$NAMESPACE_DEFAULT}"
-
-###########################################################
-#   Configure Helm Channel                                #
-###########################################################
-
-echo "- Configuring Helm channel ... "
-
-helm repo add "${NAMESPACE}" "${HELM_CHART}"
+OPENARK_HOME="${OPENARK_HOME:-$OPENARK_HOME_DEFAULT}"
 
 ###########################################################
 #   Main Function                                         #
@@ -34,20 +24,10 @@ for cluster_name in $("$(dirname "$0")/ceph-ls.sh"); do
     echo -n "* ${cluster_name}: "
     kubectl config use-context "${cluster_name}"
 
-    # Install MinIO Operator
-    if
-        ! kubectl \
-            --context "${cluster_name}" \
-            get namespace "${NAMESPACE}" \
-            >/dev/null 2>/dev/null
-    then
-        helm upgrade \
-            --create-namespace \
-            --install \
-            --namespace "${NAMESPACE}" \
-            "${NAMESPACE}" "${NAMESPACE}/${NAMESPACE}" \
-            --set watchAnyNamespace=true
-    fi
+    # Install NATS
+    pushd "${OPENARK_HOME}/templates/messengers/kafka/"
+    ./install.sh
+    popd
 done
 
 # Cleanup

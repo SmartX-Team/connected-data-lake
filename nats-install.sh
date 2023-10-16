@@ -25,7 +25,7 @@ for cluster_name in $("$(dirname "$0")/ceph-ls.sh"); do
     kubectl config use-context "${cluster_name}"
 
     # Install NATS
-    pushd "${OPENARK_HOME}/templates/dash/nats/"
+    pushd "${OPENARK_HOME}/templates/messengers/nats/"
     ./install.sh
     popd
 done
