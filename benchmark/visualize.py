@@ -23,7 +23,7 @@ def load_data(output_file: str):
     df['timestamp'] = df_timestamp
 
     # Write as .csv to be cached
-    df.to_csv('./output.csv')
+    df.to_csv(output_file)
 
 
 def load_csv(filename: str):
