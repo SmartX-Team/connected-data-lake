@@ -23,15 +23,17 @@ def load_data(output_file: str):
     df['timestamp'] = df_timestamp
 
     # Group by metrics set
-    group = csv_data.groupby(['data_size', 'messenger_type', 'payload_size'])
+    group = df.groupby(['data_size', 'messenger_type', 'payload_size'])
     group_first = group.first()
     group_last = group.last()
 
     # Calculate duration
     df = group_last
-    df['duration'] = to_datetime(group_last['timestamp']) \
-        - to_datetime(group_first['timestamp']) \
+    df['duration'] = (
+        to_datetime(group_last['timestamp'])
+        - to_datetime(group_first['timestamp'])
         + to_timedelta('1s')
+    ).dt.total_seconds()
 
     # Write as .csv to be cached
     df.to_csv(output_file)
