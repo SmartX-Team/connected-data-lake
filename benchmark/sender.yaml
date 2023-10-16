@@ -78,6 +78,8 @@ spec:
                 secretKeyRef:
                   key: CONSOLE_SECRET_KEY
                   name: object-storage-user-0
+            - name: KAFKA_HOSTS
+              value: kafka-kafka-bootstrap
             - name: NATS_ACCOUNT
               value: nats-admin-user
             - name: NATS_ADDRS
