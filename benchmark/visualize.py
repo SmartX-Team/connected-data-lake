@@ -27,6 +27,9 @@ def load_data(output_file: str):
 
 
 def inspect_data(df: DataFrame, output_file: str):
+    # Fill null values
+    df['payload_size'].fillna(0, inplace=True)
+
     # Group by metrics set
     group = df.groupby(['data_size', 'messenger_type', 'payload_size'])
     group_first = group.first()
@@ -39,6 +42,10 @@ def inspect_data(df: DataFrame, output_file: str):
         - to_datetime(group_first['timestamp'])
         + to_timedelta('1s')
     ).dt.total_seconds()
+
+    # Calculate speed
+    df['speed'] = 8 * df['total_sent_bytes'] / df['duration']
+    df['speed_payload'] = 8 * df['total_sent_payload_bytes'] / df['duration']
 
     # Write as .csv to be cached
     df.to_csv(output_file)
