@@ -132,6 +132,26 @@ metadata:
   namespace: __NAMESPACE__
 spec:
   kafka:
+    affinity:
+      nodeAffinity:
+        # KISS normal control plane nodes should be preferred
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            preference:
+              matchExpressions:
+                - key: node-role.kubernetes.io/kiss-ephemeral-control-plane
+                  operator: DoesNotExist
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/arch
+                  operator: In
+                  values:
+                    - amd64
+                - key: node-role.kubernetes.io/kiss
+                  operator: In
+                  values:
+                    - Compute
     listeners:
       - name: plain
         port: 9092
@@ -142,6 +162,26 @@ spec:
       type: ephemeral
   entityOperator: {}
   zookeeper:
+    affinity:
+      nodeAffinity:
+        # KISS normal control plane nodes should be preferred
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            preference:
+              matchExpressions:
+                - key: node-role.kubernetes.io/kiss-ephemeral-control-plane
+                  operator: DoesNotExist
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/arch
+                  operator: In
+                  values:
+                    - amd64
+                - key: node-role.kubernetes.io/kiss
+                  operator: In
+                  values:
+                    - Compute
     replicas: 1
     storage:
       type: ephemeral
