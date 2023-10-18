@@ -54,6 +54,7 @@ function create_job() {
 
 function delete_job() {
     filename="$1"
+    job_name="$2"
 
     # Delete job
     kubectl \
@@ -166,9 +167,9 @@ for use_receiver in $(yq -r '.useReceiver[]' ./benchmark/config.yaml); do
                     wait_job "${sender_job}"
 
                     # Cleanup
-                    delete_job "${sender}"
+                    delete_job "${sender}" "${sender_job}"
                     if [ "x${use_receiver}" = 'xtrue' ]; then
-                        delete_job "${receiver}"
+                        delete_job "${receiver}" "${receiver_job}"
                     fi
                 done
             done
