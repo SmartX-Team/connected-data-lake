@@ -62,7 +62,8 @@ function delete_job() {
         --filename "${filename}" >/dev/null 2>/dev/null || true
 
     # Wait until pod is deleted
-    until kubectl get pods \
+    pod_name="$(echo "${job_name}" | cut -d '/' -f 2)"
+    while kubectl get pods \
         --context 'autodata-ai-compute-1' \
         --namespace "${NAMESPACE}" \
         --output name \
@@ -165,10 +166,10 @@ for use_receiver in $(yq -r '.useReceiver[]' ./benchmark/config.yaml); do
                     wait_job "${sender_job}"
 
                     # Cleanup
+                    delete_job "${sender}"
                     if [ "x${use_receiver}" = 'xtrue' ]; then
                         delete_job "${receiver}"
                     fi
-                    delete_job "${sender}"
                 done
             done
         done
