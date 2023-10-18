@@ -62,15 +62,6 @@ function delete_job() {
         --filename "${filename}" >/dev/null 2>/dev/null || true
 
     # Wait until pod is deleted
-    pod_name="$(echo "${job_name}" | cut -d '/' -f 2)"
-    kubectl wait pods \
-        --context 'autodata-ai-compute-1' \
-        --for=delete \
-        --namespace "${NAMESPACE}" \
-        --timeout '24h' \
-        --selector "name=${pod_name}" >/dev/null 2>/dev/null || true
-
-    # Wait until pod is deleted all
     while kubectl get pods \
         --context 'autodata-ai-compute-1' \
         --namespace "${NAMESPACE}" \
