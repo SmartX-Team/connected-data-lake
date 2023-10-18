@@ -68,7 +68,7 @@ function delete_job() {
         --for=delete \
         --namespace "${NAMESPACE}" \
         --timeout '24h' \
-        --selector "name=${pod_name}" >/dev/null
+        --selector "name=${pod_name}" >/dev/null 2>/dev/null || true
 
     # Wait until pod is deleted all
     while kubectl get pods \
@@ -76,7 +76,7 @@ function delete_job() {
         --namespace "${NAMESPACE}" \
         --output name \
         --selector "name=${pod_name}" |
-        grep '.' >/dev/null; do
+        grep '.' >/dev/null 2>/dev/null; do
         sleep 1
     done
 
