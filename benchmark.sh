@@ -62,7 +62,7 @@ function delete_job() {
         --filename "${filename}" >/dev/null 2>/dev/null || true
 
     # Wait until pod is deleted
-    while kubectl get pods \
+    until kubectl get pods \
         --context 'autodata-ai-compute-1' \
         --namespace "${NAMESPACE}" \
         --output name \
