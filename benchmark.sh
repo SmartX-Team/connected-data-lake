@@ -70,6 +70,14 @@ function delete_job() {
         --timeout '24h' \
         --selector "name=${pod_name}" >/dev/null
 
+    # Wait until pod is deleted all
+    while kubectl get pods \
+        --context 'autodata-ai-compute-1' \
+        --namespace "${NAMESPACE}" \
+        --selector "name=${pod_name}" >/dev/null; do
+        sleep 1
+    done
+
     # Cleanup
     rm "${filename}"
 }
