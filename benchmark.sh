@@ -74,7 +74,9 @@ function delete_job() {
     while kubectl get pods \
         --context 'autodata-ai-compute-1' \
         --namespace "${NAMESPACE}" \
-        --selector "name=${pod_name}" >/dev/null; do
+        --output name \
+        --selector "name=${pod_name}" |
+        grep '.' >/dev/null; do
         sleep 1
     done
 
