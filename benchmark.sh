@@ -129,7 +129,6 @@ for use_receiver in $(yq -r '.useReceiver[]' ./benchmark/config.yaml); do
 
                     # Show current metrics
                     echo -e " ${use_receiver}\t   ${data_size}\t     ${messenger_type}\t   ${payload_size}\t\t${total_messages}\t      ${model_out}"
-                    continue
 
                     if [ "x${use_receiver}" = 'xtrue' ]; then
                         # Copy benchmark script
