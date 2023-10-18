@@ -223,7 +223,7 @@ spec:
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
-  name: performance-test-src
+  name: performance-test-src-sync
   labels:
     strimzi.io/cluster: kafka
 spec:
@@ -258,6 +258,8 @@ spec:
       - "performance-test-dst.>"
       - "performance-test-src"
       - "performance-test-src.>"
+      - "performance-test-src-sync"
+      - "performance-test-src-sync.>"
     subscribe:
       - "image"
       - "image.>"
@@ -265,8 +267,8 @@ spec:
       - "object-detection.>"
       - "performance-test-dst"
       - "performance-test-dst.>"
-      - "performance-test-src"
-      - "performance-test-src.>"
+      - "performance-test-src-sync"
+      - "performance-test-src-sync.>"
 #########################################################
 #   Models
 #########################################################

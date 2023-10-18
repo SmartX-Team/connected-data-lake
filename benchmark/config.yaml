@@ -11,6 +11,7 @@ dataSize:
   - 1M
 
 messengerTypes:
+  - Kafka
   - Nats
 
 payloadSize:
@@ -32,4 +33,5 @@ totalMessages:
   - 1M
 
 useReceiver:
+  - true
   - false

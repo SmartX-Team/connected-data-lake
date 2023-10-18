@@ -39,7 +39,7 @@ spec:
                   - key: kubernetes.io/arch
                     operator: In
                     values:
-                      - arm64
+                      - amd64
                   - key: node-role.kubernetes.io/kiss
                     operator: In
                     values:
@@ -103,7 +103,7 @@ spec:
             - name: PIPE_PERSISTENCE
               value: "false"
             - name: PIPE_MODEL_IN
-              value: performance-test-src
+              value: performance-test-src-sync
             - name: PIPE_MODEL_OUT
               value: performance-test-dst
             - name: RUST_LOG

@@ -98,13 +98,13 @@ function wait_job() {
 #   Main Function                                         #
 ###########################################################
 
-echo '--------------------------------------------------------------'
-echo ' Receiver  DataSize  MessengerType PayloadSize  TotalMessages '
-echo '--------------------------------------------------------------'
+echo '----------------------------------------------------------------------------------------'
+echo ' Receiver  DataSize  MessengerType PayloadSize  TotalMessages ModelOut                  '
+echo '----------------------------------------------------------------------------------------'
 
 for use_receiver in $(yq -r '.useReceiver[]' ./benchmark/config.yaml); do
-    for data_size in $(yq -r '.dataSize[]' ./benchmark/config.yaml); do
-        for messenger_type in $(yq -r '.messengerTypes[]' ./benchmark/config.yaml); do
+    for messenger_type in $(yq -r '.messengerTypes[]' ./benchmark/config.yaml); do
+        for data_size in $(yq -r '.dataSize[]' ./benchmark/config.yaml); do
             for payload_size in $(yq -r '.payloadSize[]' ./benchmark/config.yaml); do
                 for total_messages in $(yq -r '.totalMessages[]' ./benchmark/config.yaml); do
                     # Resize total messages if payload size is given
@@ -112,8 +112,24 @@ for use_receiver in $(yq -r '.useReceiver[]' ./benchmark/config.yaml); do
                         total_messages='10K'
                     fi
 
+                    # Define sender model out
+                    model_out='performance-test-src-sync'
+                    if [ "x${use_receiver}" = 'xfalse' ]; then
+                        if [ "x${messenger_type}" = 'xNats' ]; then
+                            model_out='performance-test-src'
+                        fi
+                    fi
+
+                    # Skip if Kafka with receiver
+                    if [ "x${use_receiver}" = 'xtrue' ]; then
+                        if [ "x${messenger_type}" = 'xKafka' ]; then
+                            continue
+                        fi
+                    fi
+
                     # Show current metrics
-                    echo -e " ${use_receiver}\t   ${data_size}\t     ${messenger_type}\t   ${payload_size}\t\t${total_messages}"
+                    echo -e " ${use_receiver}\t   ${data_size}\t     ${messenger_type}\t   ${payload_size}\t\t${total_messages}\t      ${model_out}"
+                    continue
 
                     if [ "x${use_receiver}" = 'xtrue' ]; then
                         # Copy benchmark script
@@ -137,6 +153,7 @@ for use_receiver in $(yq -r '.useReceiver[]' ./benchmark/config.yaml); do
 
                     # Patch script
                     patch_env "${sender}" 'PIPE_DEFAULT_MESSENGER' "${messenger_type}"
+                    patch_env "${sender}" 'PIPE_MODEL_OUT' "${model_out}"
                     patch_env "${sender}" 'PIPE_PERFORMANCE_TEST_DATA_SIZE' "${data_size}"
                     patch_env "${sender}" 'PIPE_PERFORMANCE_TEST_PAYLOAD_SIZE' "${payload_size}"
                     patch_env "${sender}" 'PIPE_PERFORMANCE_TEST_TOTAL_MESSAGES' "${total_messages}"
@@ -146,9 +163,6 @@ for use_receiver in $(yq -r '.useReceiver[]' ./benchmark/config.yaml); do
 
                     # Wait until job is completed
                     wait_job "${sender_job}"
-                    if [ "x${use_receiver}" = 'xtrue' ]; then
-                        wait_job "${receiver_job}"
-                    fi
 
                     # Cleanup
                     if [ "x${use_receiver}" = 'xtrue' ]; then
