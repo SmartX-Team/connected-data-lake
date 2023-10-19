@@ -1,0 +1,142 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: team-1
+  namespace: dev
+  labels:
+    name: team-1
+    dashService: "true"
+    serviceType: devel-team-1
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      name: team-1
+  template:
+    metadata:
+      labels:
+        name: team-1
+        dashService: "true"
+        serviceType: devel-team-1
+    spec:
+      affinity:
+        nodeAffinity:
+          # KISS normal control plane nodes should be preferred
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/kiss-ephemeral-control-plane
+                    operator: DoesNotExist
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/kiss
+                    operator: In
+                    values:
+                      - Compute
+                  - key: nvidia.com/gpu.product
+                    operator: In
+                    values:
+                      - NVIDIA-A100-SXM4-40GB
+      containers:
+        - name: team-1
+          image: quay.io/ulagbulag/openark:latest-devel
+          imagePullPolicy: Always
+          command:
+            - bash
+            - -c
+          args:
+            - >
+              echo -e 'gist2023\ngist2023\n' | sudo passwd 'user'
+              && chsh -s '/bin/bash' 'user'
+              && apt-get purge -y podman
+              && ldconfig
+              && exec '/opt/openark/entrypoint.sh'
+          ports:
+            - name: ssh
+              protocol: TCP
+              containerPort: 22
+            - name: http
+              protocol: TCP
+              containerPort: 80
+          securityContext:
+            capabilities:
+              add:
+                - apparmor:unconfined
+                - seccomp:unconfined
+          resources:
+            limits:
+              github.com/fuse: "1"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: home
+              mountPath: /home/user
+            - name: host-ssh
+              mountPath: /etc/ssh
+      hostname: team-1
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: team-1
+        - name: host-ssh
+          persistentVolumeClaim:
+            claimName: team-1-host-ssh
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: team-1
+  namespace: dev
+spec:
+  selector:
+    name: team-1
+  ports:
+    - name: ssh
+      port: 22
+      protocol: TCP
+      targetPort: 22
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 80
+  type: LoadBalancer
+  loadBalancerIP: 210.125.85.15
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: team-1
+  namespace: dev
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Ti
+  storageClassName: ceph-filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: team-1-host-ssh
+  namespace: dev
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 16Mi
+  storageClassName: ceph-filesystem
