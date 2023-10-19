@@ -40,8 +40,18 @@ function create_job() {
         apply \
         --filename "${filename}" >/dev/null
 
-    # Wait until job is ready
+    # Wait until pod is created
     pod_name="$(echo "${job_name}" | cut -d '/' -f 2)"
+    while ! kubectl get pods \
+        --context 'autodata-ai-compute-1' \
+        --namespace "${NAMESPACE}" \
+        --output name \
+        --selector "name=${pod_name}" |
+        grep '.' >/dev/null 2>/dev/null; do
+        sleep 1
+    done
+
+    # Wait until job is ready
     kubectl wait pods \
         --context 'autodata-ai-compute-1' \
         --for=condition=Ready \
