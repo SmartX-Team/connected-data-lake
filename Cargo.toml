@@ -1,0 +1,36 @@
+[workspace]
+default-members = ["crates/cdl"]
+members = ["crates/*"]
+exclude = ["crates/target"]
+resolver = "2"
+
+[workspace.package]
+authors = ["Ho Kim <ho.kim@ulagbulag.io>"]
+description = "Connected Data Lake Framework"
+documentation = "https://docs.rs/cdl"
+edition = "2021"
+include = ["src/**/*.rs", "Cargo.toml"]
+keywords = ["cdl", "data-lake", "kubernetes"]
+license = "AGPL-3.0-or-later"
+readme = "./README.md"
+rust-version = "1.82"
+homepage = "https://github.com/ulagbulag/connected-data-lake"
+repository = "https://github.com/ulagbulag/connected-data-lake"
+version = "0.1.0"
+
+[workspace.lints.clippy]
+blocks_in_conditions = "allow" # opentelemetry tracing macro would be noisy
+
+[workspace.dependencies]
+ark-core = { git = "https://github.com/ulagbulag/OpenARK" }
+
+anyhow = { version = "1.0", features = ["backtrace"] }
+chrono = { version = "0.4" }
+clap = { version = "4.5", features = ["derive", "env", "string"] }
+deltalake = { version = "0.21" }
+filetime = { version = "0.2" }
+futures = { version = "0.3" }
+glob = { version = "0.3" }
+tokio = { version = "1" }
+tracing = { version = "0.1" }
+url = { version = "2.5" }
