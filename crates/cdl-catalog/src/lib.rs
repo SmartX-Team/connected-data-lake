@@ -10,6 +10,7 @@ use url::Url;
 
 #[derive(Clone, Debug, PartialEq, Parser)]
 pub struct DatasetCatalog {
+    /// A compression method applied when storing data in backend storage.
     #[arg(
         long,
         env = "CDL_COMPRESSION",
@@ -17,9 +18,14 @@ pub struct DatasetCatalog {
     )]
     pub compression: Compression,
 
+    /// A compression level applied when storing data in backend storage.
     #[arg(long, env = "CDL_COMPRESSION_LEVEL")]
     pub compression_level: Option<u8>,
 
+    /// Max file size for each parquet file.
+    /// The larger the value, the faster the data transfer speed.
+    /// It is recommended to use the largest possible value
+    /// that is supported simultaneously by multiple backend storages.
     #[arg(
         long,
         env = "CDL_MAX_BUFFER_SIZE",
@@ -27,6 +33,9 @@ pub struct DatasetCatalog {
     )]
     pub max_buffer_size: u64,
 
+    /// Max chunk size for each file.
+    /// A larger value allows more data to be stored in a row,
+    /// but requires the same amount of data to be transmitted when modifying the data.
     #[arg(
         long,
         env = "CDL_MAX_CHUNK_SIZE",
@@ -34,9 +43,11 @@ pub struct DatasetCatalog {
     )]
     pub max_chunk_size: u64,
 
+    /// S3 access key.
     #[arg(long, env = "AWS_ACCESS_KEY_ID")]
     pub s3_access_key: String,
 
+    /// S3 region name.
     #[arg(
         long,
         env = "AWS_ENDPOINT_URL",
@@ -44,6 +55,7 @@ pub struct DatasetCatalog {
     )]
     pub s3_endpoint: Url,
 
+    /// S3 region name. Needed for AWS S3.
     #[arg(
         long,
         env = "AWS_REGION",
@@ -51,6 +63,7 @@ pub struct DatasetCatalog {
     )]
     pub s3_region: String,
 
+    /// S3 secret key.
     #[arg(long, env = "AWS_SECRET_ACCESS_KEY")]
     pub s3_secret_key: String,
 }

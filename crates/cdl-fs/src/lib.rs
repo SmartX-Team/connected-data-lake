@@ -35,7 +35,7 @@ use tracing::{info, instrument, Level};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GlobalPath {
-    pub site: DatasetPath,
+    pub dataset: DatasetPath,
     pub rel: PathBuf,
 }
 
@@ -48,22 +48,14 @@ impl FromStr for GlobalPath {
         let scheme = slice.next().unwrap();
         let next = match slice.next() {
             Some(next) => next,
-            None => {
-                return Ok(Self {
-                    site: DatasetPath {
-                        scheme: Scheme::Local,
-                        name: "localhost".into(),
-                    },
-                    rel: s.parse()?,
-                })
-            }
+            None => return Ok(Self::from_local(s.parse()?)),
         };
         let scheme = Scheme::from_str(scheme)?;
 
         let mut slice = next.split("/");
         let name = slice.next().unwrap().trim();
         if name.is_empty() {
-            bail!("Empty site name: {s}")
+            bail!("Empty dataset name: {s}")
         }
 
         let rel = slice
@@ -73,7 +65,7 @@ impl FromStr for GlobalPath {
             .unwrap_or_default();
 
         Ok(Self {
-            site: DatasetPath {
+            dataset: DatasetPath {
                 scheme,
                 name: name.into(),
             },
@@ -83,6 +75,26 @@ impl FromStr for GlobalPath {
 }
 
 impl GlobalPath {
+    pub fn from_local(rel: PathBuf) -> Self {
+        Self {
+            dataset: DatasetPath {
+                scheme: Scheme::Local,
+                name: "localhost".into(),
+            },
+            rel,
+        }
+    }
+
+    pub async fn open_table(
+        &self,
+        catalog: &DatasetCatalog,
+    ) -> Result<(DeltaTable, SendableRecordBatchStream)> {
+        match self.dataset.scheme {
+            Scheme::Local => bail!("Local filesystem does not support CDL rootfs table"),
+            Scheme::S3A => open_table(catalog, &self.dataset).await,
+        }
+    }
+
     pub async fn copy_all(&self, catalog: &DatasetCatalog, dst: &Self) -> Result<()> {
         let stream = self.load_all_as_stream(catalog).await?;
         dst.dump_all(catalog, stream).await
@@ -92,10 +104,10 @@ impl GlobalPath {
         &'a self,
         catalog: &'a DatasetCatalog,
     ) -> Result<Pin<Box<dyn 'a + Stream<Item = Result<FileRecord>>>>> {
-        match self.site.scheme {
+        match self.dataset.scheme {
             Scheme::Local => Ok(Box::pin(FileRecord::load_all(catalog, &self.rel).await?)),
             Scheme::S3A => {
-                let (_, stream) = open_table(&catalog, &self.site).await?;
+                let (_, stream) = open_table(&catalog, &self.dataset).await?;
                 let stream = stream
                     .map(|batch| {
                         batch
@@ -114,10 +126,10 @@ impl GlobalPath {
         catalog: &DatasetCatalog,
         stream: impl Stream<Item = Result<FileRecord>>,
     ) -> Result<()> {
-        match self.site.scheme {
+        match self.dataset.scheme {
             Scheme::Local => FileRecord::dump_all(&self.rel, stream).await,
             Scheme::S3A => {
-                let table = create_table(&catalog, &self.site).await?;
+                let table = create_table(&catalog, &self.dataset).await?;
                 let schema: SchemaRef = Arc::new(table.get_schema()?.try_into()?);
 
                 let writer_properties = WriterProperties::builder()
@@ -684,8 +696,8 @@ pub struct FileMetadataRecord {
 }
 
 #[instrument(skip_all, err(level = Level::ERROR))]
-async fn create_table(catalog: &DatasetCatalog, site: &DatasetPath) -> Result<DeltaTable> {
-    let uri = site.to_uri(DIR_ROOTFS);
+async fn create_table(catalog: &DatasetCatalog, dataset: &DatasetPath) -> Result<DeltaTable> {
+    let uri = dataset.to_uri(DIR_ROOTFS);
     let ops = create_delta_ops(catalog, &uri).await?;
     match &ops.0.state {
         Some(_) => ops
@@ -704,9 +716,9 @@ async fn create_table(catalog: &DatasetCatalog, site: &DatasetPath) -> Result<De
 #[instrument(skip_all, err(level = Level::ERROR))]
 async fn open_table(
     catalog: &DatasetCatalog,
-    site: &DatasetPath,
+    dataset: &DatasetPath,
 ) -> Result<(DeltaTable, SendableRecordBatchStream)> {
-    let uri = site.to_uri(DIR_ROOTFS);
+    let uri = dataset.to_uri(DIR_ROOTFS);
     let ops = create_delta_ops(catalog, &uri).await?;
     if ops.0.state.is_none() {
         bail!("Empty storage")

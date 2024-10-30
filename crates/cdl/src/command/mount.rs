@@ -1,20 +1,23 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use cdl_catalog::DatasetCatalog;
 use cdl_fs::GlobalPath;
+use cdl_fuse::FileMount;
 use clap::Parser;
 use tracing::instrument;
 
-/// Copy the dataset's data into the other's specific directory
+/// Mount the dataset into the specified local directory
 ///
 #[derive(Clone, Debug, PartialEq, Parser)]
-pub struct CopyArgs {
+pub struct MountArgs {
     pub from: GlobalPath,
-    pub to: GlobalPath,
+    pub to: PathBuf,
 }
 
-impl CopyArgs {
+impl MountArgs {
     #[instrument(skip_all)]
     pub(super) async fn execute(self, catalog: DatasetCatalog) -> Result<()> {
-        self.from.copy_all(&catalog, &self.to).await
+        self.from.mount_to(catalog, &self.to).await
     }
 }

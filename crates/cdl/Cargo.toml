@@ -24,12 +24,13 @@ default = ["default-tls"]
 
 # TLS
 default-tls = ["rustls-tls"]
-openssl-tls = ["cdl-fs/openssl-tls"]
-rustls-tls = ["cdl-fs/rustls-tls"]
+openssl-tls = ["cdl-fs/openssl-tls", "cdl-fuse/openssl-tls"]
+rustls-tls = ["cdl-fs/rustls-tls", "cdl-fuse/openssl-tls"]
 
 [dependencies]
 cdl-catalog = { path = "../cdl-catalog" }
 cdl-fs = { path = "../cdl-fs" }
+cdl-fuse = { path = "../cdl-fuse" }
 
 anyhow = { workspace = true }
 ark-core = { workspace = true }

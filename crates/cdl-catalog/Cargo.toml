@@ -19,6 +19,13 @@ workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = []
+
+# TLS
+openssl-tls = ["deltalake/s3-native-tls"]
+rustls-tls = ["deltalake/s3"]
+
 [dependencies]
 clap = { workspace = true }
 deltalake = { workspace = true }
