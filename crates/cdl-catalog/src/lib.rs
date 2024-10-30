@@ -1,11 +1,32 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+use deltalake::{
+    parquet::{basic, file::properties::EnabledStatistics},
+    DeltaResult,
+};
 use tracing::info;
 use url::Url;
 
 #[derive(Clone, Debug, PartialEq, Parser)]
 pub struct DatasetCatalog {
+    #[arg(
+        long,
+        env = "CDL_COMPRESSION",
+        default_value_t = Compression::default(),
+    )]
+    pub compression: Compression,
+
+    #[arg(long, env = "CDL_COMPRESSION_LEVEL")]
+    pub compression_level: Option<u8>,
+
+    #[arg(
+        long,
+        env = "CDL_MAX_BUFFER_SIZE",
+        default_value_t = Self::default_max_buffer_size(),
+    )]
+    pub max_buffer_size: u64,
+
     #[arg(
         long,
         env = "CDL_MAX_CHUNK_SIZE",
@@ -36,8 +57,13 @@ pub struct DatasetCatalog {
 
 impl DatasetCatalog {
     #[inline]
+    pub const fn default_max_buffer_size() -> u64 {
+        1 * 1024 * 1024 * 1024 // 1 GB
+    }
+
+    #[inline]
     pub const fn default_max_chunk_size() -> u64 {
-        8 * 1024 * 1024 // 8 MB
+        256 * 1024 // 256 KB
     }
 
     #[inline]
@@ -70,5 +96,61 @@ impl DatasetCatalog {
         options.insert("AWS_SECRET_ACCESS_KEY".into(), self.s3_secret_key.clone());
         options.insert("conditional_put".into(), "etag".into());
         options
+    }
+
+    pub fn compression(&self) -> DeltaResult<basic::Compression> {
+        Ok(match self.compression {
+            Compression::BROTLI => basic::Compression::BROTLI(match self.compression_level {
+                Some(level) => basic::BrotliLevel::try_new(level as _)?,
+                None => basic::BrotliLevel::default(),
+            }),
+            Compression::GZIP => basic::Compression::GZIP(match self.compression_level {
+                Some(level) => basic::GzipLevel::try_new(level as _)?,
+                None => basic::GzipLevel::default(),
+            }),
+            Compression::LZO => basic::Compression::LZO,
+            Compression::LZ4 => basic::Compression::LZ4,
+            Compression::LZ4_RAW => basic::Compression::LZ4_RAW,
+            Compression::SNAPPY => basic::Compression::SNAPPY,
+            Compression::UNCOMPRESSED => basic::Compression::UNCOMPRESSED,
+            Compression::ZSTD => basic::Compression::ZSTD(match self.compression_level {
+                Some(level) => basic::ZstdLevel::try_new(level as _)?,
+                None => basic::ZstdLevel::default(),
+            }),
+        })
+    }
+
+    #[inline]
+    pub const fn enabled_statistics(&self) -> EnabledStatistics {
+        EnabledStatistics::None
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, ValueEnum)]
+#[allow(non_camel_case_types)]
+pub enum Compression {
+    BROTLI,
+    GZIP,
+    LZO,
+    LZ4,
+    LZ4_RAW,
+    #[default]
+    SNAPPY,
+    UNCOMPRESSED,
+    ZSTD,
+}
+
+impl fmt::Display for Compression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BROTLI => "brotli".fmt(f),
+            Self::GZIP => "gzip".fmt(f),
+            Self::LZO => "lzo".fmt(f),
+            Self::LZ4 => "lz4".fmt(f),
+            Self::LZ4_RAW => "lz4-raw".fmt(f),
+            Self::SNAPPY => "snappy".fmt(f),
+            Self::UNCOMPRESSED => "none".fmt(f),
+            Self::ZSTD => "zstd".fmt(f),
+        }
     }
 }

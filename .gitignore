@@ -25,3 +25,4 @@ Cargo.lock
 
 # Temporary files
 /rootfs
+/test
