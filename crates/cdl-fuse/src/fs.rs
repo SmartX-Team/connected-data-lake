@@ -2,7 +2,7 @@ use std::{ffi::OsStr, sync::Arc, time::SystemTime};
 
 use anyhow::Result;
 use cdl_catalog::DatasetCatalog;
-use cdl_fs::{GlobalPath, DIR_ROOTFS};
+use cdl_fs::GlobalPath;
 use deltalake::{datafusion::prelude::SessionContext, DeltaTable};
 use fuser::{
     Filesystem, KernelConfig, ReplyAttr, ReplyBmap, ReplyCreate, ReplyData, ReplyDirectory,

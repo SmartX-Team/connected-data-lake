@@ -1,5 +1,7 @@
 from enum import Enum
 
+import pyarrow
+
 
 class Compression(Enum):
     BROTLI = 0
@@ -13,32 +15,26 @@ class Compression(Enum):
 
 
 class Url:
-    def __init__(self, /, url: str) -> None: ...
+    def __init__(self, url: str, /) -> None: ...
 
 
 class DatasetCatalog:
-    ...
-
-
-class FileMetadataRecord:
-    ...
-
-
-class FileRecordRef:
-    name: str
-    parent: str | None
-    metadata: FileMetadataRecord | None
-    chunk_id: int
-    chunk_offset: int
-    chunk_size: int
-
-
-class FileRecord(FileRecordRef):
-    ...
+    compression: Compression
+    compression_level: int | None = None
+    max_buffer_size: int
+    max_chunk_size: int
+    s3_access_key: str
+    s3_endpoint: Url
+    s3_region: str
+    s3_secret_key: str
 
 
 class CdlFS:
-    def copy_to(self, dst: str) -> None: ...
+    def copy_to(self, dst: str, /) -> None: ...
+
+    def read_dir(self, path: str = '/', /) -> pyarrow.RecordBatch: ...
+
+    def read_dir_all(self, /) -> pyarrow.RecordBatch: ...
 
 
 class Cdl:
@@ -47,4 +43,4 @@ class Cdl:
         catalog: DatasetCatalog | None = None,
     ) -> None: ...
 
-    def open(self, url: str) -> CdlFS: ...
+    def open(self, url: str, /) -> CdlFS: ...

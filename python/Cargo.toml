@@ -34,12 +34,13 @@ rustls-tls = ["cdl-catalog/rustls-tls", "cdl-fs/rustls-tls"]
 
 [dependencies]
 cdl-catalog = { path = "../crates/cdl-catalog", features = ["pyo3"] }
-cdl-core = { path = "../crates/cdl-core", features = ["pyo3"] }
-cdl-fs = { path = "../crates/cdl-fs", features = ["pyo3"] }
+cdl-fs = { path = "../crates/cdl-fs" }
 
 anyhow = { workspace = true }
 ark-core = { workspace = true }
 clap = { workspace = true }
+deltalake = { workspace = true, features = ["python"] }
+futures = { workspace = true }
 pyo3 = { workspace = true, features = [
     "abi3-py312",
     "anyhow",
@@ -49,7 +50,6 @@ pyo3 = { workspace = true, features = [
     "extension-module",
     "macros",
     "nightly",
-    "py-clone",
     "serde",
 ] }
 tokio = { workspace = true, features = ["full"] }

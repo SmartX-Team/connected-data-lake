@@ -15,7 +15,7 @@ use strum::{Display, EnumString};
 use tracing::info;
 
 #[derive(Clone, Debug, PartialEq, Parser)]
-#[cfg_attr(feature = "pyo3", pyclass(eq))]
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DatasetCatalog {
     /// A compression method applied when storing data in backend storage.
@@ -151,7 +151,7 @@ impl DatasetCatalog {
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Display, Default, PartialEq, Eq, Hash, EnumString, ValueEnum)]
-#[cfg_attr(feature = "pyo3", pyclass(eq, eq_int))]
+#[cfg_attr(feature = "pyo3", pyclass)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 #[strum(serialize_all = "kebab-case")]
@@ -211,8 +211,8 @@ impl ops::DerefMut for Url {
 impl Url {
     #[new]
     #[pyo3(signature = (
-        /,
         url,
+        /,
     ))]
     fn new(url: &str) -> PyResult<Self> {
         url.parse().map_err(|error| Error::from(error).into())

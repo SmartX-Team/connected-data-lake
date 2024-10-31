@@ -34,7 +34,7 @@ fuser = { version = "0.15" }
 futures = { version = "0.3" }
 glob = { version = "0.3" }
 libc = { version = "0.2" }
-pyo3 = { version = "0.22", features = [
+pyo3 = { version = "0.21", features = [
     "anyhow",
     "experimental-inspect",
     "macros",
