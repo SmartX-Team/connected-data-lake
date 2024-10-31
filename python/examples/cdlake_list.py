@@ -1,13 +1,18 @@
 import argparse
 
 import cdlake
+import torch
 
 
 def main(src: str) -> None:
     cdl = cdlake.Cdl()
     fs = cdl.open(src)
-    ds = fs.to_torch_dataset()
-    print(list(ds))
+
+    loader = torch.utils.data.DataLoader(
+        dataset=fs.to_torch_dataset(),
+        batch_size=1,
+    )
+    print(next(iter(loader)))
 
 
 if __name__ == '__main__':

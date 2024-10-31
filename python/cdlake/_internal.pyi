@@ -1,6 +1,6 @@
 from enum import Enum
 
-import pyarrow
+import pyarrow as pa
 
 
 class Compression(Enum):
@@ -32,9 +32,11 @@ class DatasetCatalog:
 class CdlFS:
     def copy_to(self, dst: str, /) -> None: ...
 
-    def read_dir(self, path: str = '/', /) -> pyarrow.RecordBatch: ...
+    def read_dir(self, path: str = '/', /) -> pa.RecordBatch: ...
 
-    def read_dir_all(self, /) -> pyarrow.RecordBatch: ...
+    def read_dir_all(self, /) -> pa.RecordBatch: ...
+
+    def read_files(self, files: pa.RecordBatch, /) -> list[bytes]: ...
 
 
 class Cdl:

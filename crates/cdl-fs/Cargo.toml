@@ -36,6 +36,7 @@ deltalake = { workspace = true, features = ["datafusion"] }
 filetime = { workspace = true }
 futures = { workspace = true }
 glob = { workspace = true }
+itertools = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }

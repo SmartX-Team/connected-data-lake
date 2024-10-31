@@ -17,7 +17,7 @@ use deltalake::{
     },
     datafusion::{
         execution::SendableRecordBatchStream,
-        prelude::{DataFrame, SessionContext},
+        prelude::{DataFrame, SessionConfig, SessionContext},
     },
     kernel::{Action, DataType, PrimitiveType, StructField},
     operations::transaction::CommitBuilder,
@@ -29,6 +29,7 @@ use deltalake::{
 use filetime::FileTime;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
 use glob::glob;
+use itertools::Itertools;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -36,49 +37,84 @@ use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     spawn, sync,
 };
-use tracing::{info, instrument, Level};
+use tracing::{debug, info, instrument, Level};
 
 pub struct CdlFS {
     catalog: DatasetCatalog,
+    ctx: SessionContext,
     path: GlobalPath,
 }
 
 impl CdlFS {
+    #[instrument(skip_all, err(level = Level::ERROR))]
     pub async fn copy_to(&self, dst: &GlobalPath) -> Result<()> {
         let stream = self.load_all().await?;
         dst.dump_all(&self.catalog, stream).await
     }
 
+    #[instrument(skip_all, err(level = Level::ERROR))]
     pub async fn read_dir(&self, path: impl AsRef<Path>) -> Result<SendableRecordBatchStream> {
-        let mut parent = path.as_ref().to_str().context("Invalid path")?;
-        while parent.starts_with("/") {
-            parent = &parent[1..];
-        }
-
-        let condition_parent = if parent.is_empty() {
-            // "parent IS NULL".into()
-            "parent LIKE ''".into()
-        } else {
-            format!("parent LIKE '{parent}'")
-        };
-        let condition = format!("WHERE {condition_parent} AND SIZE IS NOT NULL");
+        let parent = trim_rel_suffix(path.as_ref().to_str().context("Invalid path")?);
+        let condition =
+            format!("WHERE parent LIKE '{parent}' AND size IS NOT NULL ORDER BY name ASC");
         self.list_by(&condition).await
     }
 
+    #[instrument(skip_all, err(level = Level::ERROR))]
     pub async fn read_dir_all(&self) -> Result<SendableRecordBatchStream> {
-        let condition = "";
+        let condition = "WHERE size IS NOT NULL ORDER BY parent ASC, name ASC";
         self.list_by(condition).await
+    }
+
+    #[instrument(skip_all, err(level = Level::ERROR))]
+    pub async fn read_files(
+        &self,
+        files: &RecordBatch,
+    ) -> Result<impl '_ + Send + Stream<Item = Result<FileRecord>>> {
+        let records = FileRecordBatch::try_from(files)?.to_vec()?;
+        let condition_name = records
+            .iter()
+            .map(|FileRecord { name, parent, .. }| {
+                format!("name = '{name}' AND parent = '{parent}'")
+            })
+            .join(" OR ");
+        let condition =
+            format!("WHERE {condition_name} ORDER BY parent ASC, name ASC, chunk_id ASC");
+
+        info!("{}", 1);
+        let stream = self.load_by(&condition).await?;
+        info!("{}", 2);
+        let files: Vec<_> = stream
+            .map_ok(|d| {
+                info!("{}", 2.1);
+                d
+            })
+            .try_collect()
+            .await?;
+        info!("{}", 3);
+        info!("{}", files[0].num_rows());
+        todo!();
+        Ok(stream::empty())
     }
 }
 
 impl CdlFS {
+    async fn ctx(&self) -> Result<&SessionContext> {
+        if !self.ctx.table_exist(DIR_ROOTFS)? {
+            let table = Arc::new(self.table().await?);
+            self.ctx.register_table(DIR_ROOTFS, table)?;
+        }
+        Ok(&self.ctx)
+    }
+
     #[inline]
     async fn list_by(&self, condition: &str) -> Result<SendableRecordBatchStream> {
-        let sql = format!("SELECT name, parent FROM {DIR_ROOTFS} {condition}");
-        info!("Querying: {sql}");
+        let sql = format!(
+            "SELECT name, parent, atime, ctime, mtime, mode, size, chunk_id, chunk_offset, chunk_size, x'' AS data FROM {DIR_ROOTFS} {condition}"
+        );
+        debug!("Querying LIST: {sql}");
 
         let df = self.query(&sql).await?;
-        df.clone().show().await?;
         df.execute_stream()
             .await
             .context("Failed to execute the dataframe")
@@ -89,6 +125,7 @@ impl CdlFS {
     ) -> Result<Pin<Box<dyn '_ + Send + Stream<Item = Result<FileRecord>>>>> {
         let Self {
             catalog,
+            ctx: _,
             path: GlobalPath { dataset, rel: root },
         } = self;
 
@@ -103,8 +140,9 @@ impl CdlFS {
                     .map(|batch| {
                         batch
                             .map_err(Into::into)
-                            .and_then(FileRecordBatch::try_from)
-                            .map(FileRecordBatch::into_stream)
+                            .and_then(|ref batch| FileRecordBatch::try_from(batch))
+                            .and_then(FileRecordBatch::to_vec)
+                            .map(|records| stream::iter(records.into_iter().map(Ok)))
                     })
                     .try_flatten();
                 Ok(Box::pin(stream))
@@ -112,12 +150,24 @@ impl CdlFS {
         }
     }
 
-    async fn query(&self, sql: &str) -> Result<DataFrame> {
-        let table = Arc::new(self.table().await?);
+    #[inline]
+    async fn load_by(&self, condition: &str) -> Result<SendableRecordBatchStream> {
+        let sql = format!("SELECT * FROM {DIR_ROOTFS} {condition}");
+        info!("Querying LOAD: {sql}");
 
-        let ctx = SessionContext::new();
-        ctx.register_table(DIR_ROOTFS, table)?;
-        ctx.sql(sql)
+        let df = self.query(&sql).await?;
+        let df = df.limit(0, Some(1))?;
+        info!("{}", df.clone().count().await?);
+        info!("{}", df.clone().collect().await?.len());
+        df.execute_stream()
+            .await
+            .context("Failed to execute the dataframe")
+    }
+
+    async fn query(&self, sql: &str) -> Result<DataFrame> {
+        self.ctx()
+            .await?
+            .sql(sql)
             .await
             .context("Failed to query CDL rootfs table")
     }
@@ -125,6 +175,7 @@ impl CdlFS {
     async fn table(&self) -> Result<DeltaTable> {
         let Self {
             catalog,
+            ctx: _,
             path: GlobalPath { dataset, .. },
         } = self;
 
@@ -185,9 +236,18 @@ impl GlobalPath {
         }
     }
 
+    #[instrument(skip_all, err(level = Level::ERROR))]
     pub async fn open(self, catalog: DatasetCatalog) -> Result<CdlFS> {
+        let mut config = SessionConfig::new();
+        {
+            let mut options = config.options_mut();
+            options.execution.parquet.metadata_size_hint = Some(catalog.max_buffer_size as _);
+            options.execution.parquet.pushdown_filters = true;
+        }
+
         Ok(CdlFS {
             catalog,
+            ctx: SessionContext::new_with_config(config),
             path: self,
         })
     }
@@ -309,14 +369,12 @@ impl DatasetPath {
         }
     }
 
-    pub fn to_uri(&self, mut rel: &str) -> String {
+    pub fn to_uri(&self, rel: &str) -> String {
         match self.scheme {
             Scheme::Local => rel.into(),
             Scheme::S3A => {
                 let name = &self.name;
-                while rel.starts_with("/") {
-                    rel = &rel[1..];
-                }
+                let rel = trim_rel_path(rel);
                 format!("s3a://{name}/{rel}")
             }
         }
@@ -355,10 +413,10 @@ struct FileRecordBatch {
     pub data: array::BinaryArray,
 }
 
-impl TryFrom<RecordBatch> for FileRecordBatch {
+impl TryFrom<&RecordBatch> for FileRecordBatch {
     type Error = Error;
 
-    fn try_from(batch: RecordBatch) -> Result<Self, Self::Error> {
+    fn try_from(batch: &RecordBatch) -> Result<Self, Self::Error> {
         fn get_column<T>(
             batch: &RecordBatch,
             name: &str,
@@ -378,23 +436,23 @@ impl TryFrom<RecordBatch> for FileRecordBatch {
         }
 
         Ok(Self {
-            name: get_column(&batch, "name", |c| c.as_string_opt())?,
-            parent: get_column(&batch, "parent", |c| c.as_string_opt())?,
-            atime: get_column(&batch, "atime", |c| c.as_primitive_opt())?,
-            ctime: get_column(&batch, "ctime", |c| c.as_primitive_opt())?,
-            mtime: get_column(&batch, "mtime", |c| c.as_primitive_opt())?,
-            mode: get_column(&batch, "mode", |c| c.as_primitive_opt())?,
-            size: get_column(&batch, "size", |c| c.as_primitive_opt())?,
-            chunk_id: get_column(&batch, "chunk_id", |c| c.as_primitive_opt())?,
-            chunk_offset: get_column(&batch, "chunk_offset", |c| c.as_primitive_opt())?,
-            chunk_size: get_column(&batch, "chunk_size", |c| c.as_primitive_opt())?,
-            data: get_column(&batch, "data", |c| c.as_binary_opt())?,
+            name: get_column(batch, "name", |c| c.as_string_opt())?,
+            parent: get_column(batch, "parent", |c| c.as_string_opt())?,
+            atime: get_column(batch, "atime", |c| c.as_primitive_opt())?,
+            ctime: get_column(batch, "ctime", |c| c.as_primitive_opt())?,
+            mtime: get_column(batch, "mtime", |c| c.as_primitive_opt())?,
+            mode: get_column(batch, "mode", |c| c.as_primitive_opt())?,
+            size: get_column(batch, "size", |c| c.as_primitive_opt())?,
+            chunk_id: get_column(batch, "chunk_id", |c| c.as_primitive_opt())?,
+            chunk_offset: get_column(batch, "chunk_offset", |c| c.as_primitive_opt())?,
+            chunk_size: get_column(batch, "chunk_size", |c| c.as_primitive_opt())?,
+            data: get_column(batch, "data", |c| c.as_binary_opt())?,
         })
     }
 }
 
 impl FileRecordBatch {
-    fn into_stream(self) -> impl Stream<Item = Result<FileRecord>> {
+    fn to_vec(self) -> Result<Vec<FileRecord>> {
         let Self {
             name,
             parent,
@@ -431,20 +489,19 @@ impl FileRecordBatch {
             })
         };
 
-        stream::iter(
-            data.filter_map(|data| {
-                Some(Ok(FileRecord {
+        Ok(data
+            .filter_map(|data| {
+                Some(FileRecord {
                     name: name.next()??.into(),
                     parent: parent.next()??.into(),
                     metadata: get_metadata(),
                     chunk_id: chunk_id.next()?? as _,
                     chunk_offset: chunk_offset.next()?? as _,
                     chunk_size: chunk_size.next()?? as _,
-                    data: data?.to_vec(),
-                }))
+                    data: data.unwrap_or_default().to_vec(),
+                })
             })
-            .collect::<Vec<_>>(),
-        )
+            .collect())
     }
 }
 
@@ -634,7 +691,7 @@ impl FileRecord {
         stream::iter(files)
     }
 
-    #[instrument(skip_all, err(level = Level::ERROR))]
+    #[instrument(skip_all)]
     async fn load_all<'a>(
         catalog: &'a DatasetCatalog,
         root: &'a Path,
@@ -656,14 +713,10 @@ impl FileRecord {
     #[instrument(
         skip(self),
         fields(name = %self.name, parent = &self.parent),
-        err(level = Level::ERROR),
     )]
     async fn dump(&self, root: &Path) -> Result<()> {
         let path = {
-            let mut parent = self.parent.as_str();
-            while parent.starts_with("/") {
-                parent = &parent[1..];
-            }
+            let parent = trim_rel_path(self.parent.as_str());
             let base_dir = root.join(parent);
             fs::create_dir_all(&base_dir).await?;
             base_dir.join(&self.name)
@@ -696,7 +749,7 @@ impl FileRecord {
         Ok(())
     }
 
-    #[instrument(skip_all, err(level = Level::ERROR))]
+    #[instrument(skip_all)]
     async fn dump_all(root: &Path, stream: impl Stream<Item = Result<FileRecord>>) -> Result<()> {
         fs::create_dir_all(&root)
             .await
@@ -778,7 +831,7 @@ pub struct FileMetadataRecord {
     pub size: u64,
 }
 
-#[instrument(skip_all, err(level = Level::ERROR))]
+#[instrument(skip_all)]
 async fn create_table(catalog: &DatasetCatalog, dataset: &DatasetPath) -> Result<DeltaTable> {
     let uri = dataset.to_uri(DIR_ROOTFS);
     let ops = create_delta_ops(catalog, &uri).await?;
@@ -796,7 +849,7 @@ async fn create_table(catalog: &DatasetCatalog, dataset: &DatasetPath) -> Result
     }
 }
 
-#[instrument(skip_all, err(level = Level::ERROR))]
+#[instrument(skip_all)]
 async fn open_table(
     catalog: &DatasetCatalog,
     dataset: &DatasetPath,
@@ -812,11 +865,25 @@ async fn open_table(
         .with_context(|| format!("Cannot open a rootfs table on {uri:?}"))
 }
 
-#[instrument(skip(catalog), err(level = Level::ERROR))]
+#[instrument(skip(catalog))]
 async fn create_delta_ops(catalog: &DatasetCatalog, uri: &str) -> Result<DeltaOps> {
     DeltaOps::try_from_uri_with_storage_options(uri, catalog.storage_options())
         .await
         .with_context(|| format!("Cannot init a rootfs table on {uri:?}"))
+}
+
+fn trim_rel_path(mut path: &str) -> &str {
+    while path.starts_with('/') {
+        path = &path[1..];
+    }
+    trim_rel_suffix(path)
+}
+
+fn trim_rel_suffix(mut path: &str) -> &str {
+    while path.ends_with('/') {
+        path = &path[..path.len() - 1];
+    }
+    path
 }
 
 const DIR_ROOTFS: &str = "rootfs";

@@ -33,6 +33,7 @@ filetime = { version = "0.2" }
 fuser = { version = "0.15" }
 futures = { version = "0.3" }
 glob = { version = "0.3" }
+itertools = { version = "0.13" }
 libc = { version = "0.2" }
 pyo3 = { version = "0.21", features = [
     "anyhow",

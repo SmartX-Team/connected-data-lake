@@ -1,14 +1,17 @@
 use std::{future::Future, sync::OnceLock};
 
-use anyhow::{Context, Error};
+use anyhow::{Context, Error, Result};
 use cdl_catalog::{Compression, DatasetCatalog, Url};
 use cdl_fs::GlobalPath;
 use clap::Parser;
-use deltalake::arrow::{array::RecordBatch, compute::concat_batches, pyarrow::PyArrowType};
-use futures::TryStreamExt;
+use deltalake::{
+    arrow::{array::RecordBatch, compute::concat_batches, pyarrow::PyArrowType},
+    datafusion::execution::SendableRecordBatchStream,
+};
+use futures::{TryFutureExt, TryStreamExt};
 use pyo3::{pyclass, pymethods, pymodule, types::PyModule, Bound, PyResult};
 use tokio::runtime::Runtime;
-use tracing::info;
+use tracing::debug;
 
 #[pyclass]
 pub struct Cdl {
@@ -64,17 +67,11 @@ impl CdlFS {
         /,
     ))]
     fn read_dir(&self, path: &str) -> PyResult<PyArrowType<RecordBatch>> {
-        wrap_tokio(async {
-            let stream = self.0.read_dir(path).await?;
-            let schema = stream.schema();
-            let input_batches: Vec<_> = stream
-                .try_collect()
-                .await
-                .context("Failed to collect directory data")?;
-            let batch = concat_batches(&schema, &input_batches)
-                .context("Failed to concat directory data")?;
-            PyResult::Ok(PyArrowType(batch))
-        })
+        wrap_tokio(
+            self.0
+                .read_dir(path)
+                .and_then(|stream| collect_batches(stream, "directory data")),
+        )
         .map_err(Into::into)
     }
 
@@ -82,19 +79,39 @@ impl CdlFS {
         /,
     ))]
     fn read_dir_all(&self) -> PyResult<PyArrowType<RecordBatch>> {
+        wrap_tokio(
+            self.0
+                .read_dir_all()
+                .and_then(|stream| collect_batches(stream, "all directory data")),
+        )
+        .map_err(Into::into)
+    }
+
+    #[pyo3(signature = (
+        files,
+        /,
+    ))]
+    fn read_files(&self, files: PyArrowType<RecordBatch>) -> PyResult<Vec<Vec<u8>>> {
         wrap_tokio(async {
-            let stream = self.0.read_dir_all().await?;
-            let schema = stream.schema();
-            let input_batches: Vec<_> = stream
-                .try_collect()
-                .await
-                .context("Failed to collect all directory data")?;
-            let batch = concat_batches(&schema, &input_batches)
-                .context("Failed to concat all directory data")?;
-            PyResult::Ok(PyArrowType(batch))
+            let stream = self.0.read_files(&files.0).await?;
+            stream.map_ok(|record| record.data).try_collect().await
         })
         .map_err(Into::into)
     }
+}
+
+async fn collect_batches(
+    stream: SendableRecordBatchStream,
+    kind: &'static str,
+) -> Result<PyArrowType<RecordBatch>> {
+    let schema = stream.schema();
+    let input_batches: Vec<_> = stream
+        .try_collect()
+        .await
+        .with_context(|| format!("Failed to collect {kind}"))?;
+    let batch = concat_batches(&schema, &input_batches)
+        .with_context(|| format!("Failed to concat {kind}"))?;
+    Ok(PyArrowType(batch))
 }
 
 fn wrap_tokio<F>(future: F) -> F::Output
@@ -110,7 +127,7 @@ where
 fn _internal(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Init
     ::ark_core::tracer::init_once();
-    info!("Welcome to Connected Data Lake!");
+    debug!("Welcome to Connected Data Lake!");
 
     // Metadata
     m.add("__author__", env!("CARGO_PKG_AUTHORS"))?;

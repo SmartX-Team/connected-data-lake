@@ -1,3 +1,5 @@
+import pyarrow as pa
+
 try:
     import torch
 except ImportError:
@@ -6,16 +8,33 @@ except ImportError:
 from ._internal import CdlFS as _CdlFSImpl
 
 
-class CdlDataset[T](torch.utils.data.IterableDataset[T]):
-    def __getitem__(self, index: int) -> T:
-        raise NotImplementedError(
-            "Subclasses of Dataset should implement __getitem__.")
+class CdlTorchDataset(torch.utils.data.Dataset[bytes]):
+    def __init__(
+        self,
+        batch: pa.RecordBatch,
+        batch_size: int,
+        fs: 'CdlFS',
+    ) -> None:
+        super().__init__()
+        self._batch = batch
+        self._batch_size = batch_size
+        self._fs = fs
 
-    def __iter__(self):
-        return iter([])
+    def __getitem__(
+        self,
+        index: int,
+    ) -> bytes:
+        return self.__getitems__([index])[0]
+
+    def __getitems__(
+        self,
+        indices: list[int],
+    ) -> list[bytes]:
+        print(self._batch.take(indices))
+        return self._fs._impl.read_files(self._batch.take(indices))
 
     def __len__(self) -> int:
-        return 0
+        return len(self._batch)
 
 
 class CdlFS:
@@ -25,6 +44,12 @@ class CdlFS:
     def copy_to(self, dst: str, /) -> None:
         return self._impl.copy_to(dst)
 
-    def to_torch_dataset[T](self) -> CdlDataset:
-        self._impl.read_dir('/')
-        return CdlDataset[T]()
+    def to_torch_dataset(
+        self,
+        batch_size: int = 1,
+    ) -> CdlTorchDataset:
+        return CdlTorchDataset(
+            batch=self._impl.read_dir_all(),
+            batch_size=batch_size,
+            fs=self,
+        )
