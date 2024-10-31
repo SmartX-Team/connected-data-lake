@@ -9,6 +9,8 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Error, Result};
 use cdl_catalog::DatasetCatalog;
+#[cfg(feature = "pyo3")]
+use cdl_core::wrap_tokio;
 use chrono::{DateTime, Timelike, Utc};
 use deltalake::{
     arrow::{
@@ -26,6 +28,10 @@ use deltalake::{
 use filetime::FileTime;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
 use glob::glob;
+#[cfg(feature = "pyo3")]
+use pyo3::{pyclass, pymethods, PyResult};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
@@ -33,7 +39,54 @@ use tokio::{
 };
 use tracing::{info, instrument, Level};
 
+#[cfg_attr(feature = "pyo3", pyclass)]
+pub struct CdlFS {
+    catalog: DatasetCatalog,
+    path: GlobalPath,
+}
+
+impl CdlFS {
+    pub async fn copy_to(&self, dst: &GlobalPath) -> Result<()> {
+        let Self {
+            catalog,
+            path: GlobalPath { dataset, rel: root },
+        } = self;
+
+        let stream: Pin<Box<dyn Send + Stream<Item = _>>> = match dataset.scheme {
+            Scheme::Local => Box::pin(FileRecord::<Vec<u8>>::load_all(catalog, root).await?),
+            Scheme::S3A => {
+                let (_, stream) = open_table(catalog, dataset).await?;
+                // TODO: filter root path
+                let stream = stream
+                    .map(|batch| {
+                        batch
+                            .map_err(Into::into)
+                            .and_then(FileRecordBatch::try_from)
+                            .map(FileRecordBatch::into_stream)
+                    })
+                    .try_flatten();
+                Box::pin(stream)
+            }
+        };
+        dst.dump_all(&self.catalog, stream).await
+    }
+}
+
+#[cfg(feature = "pyo3")]
+#[pymethods]
+impl CdlFS {
+    #[pyo3(name = "copy_to", signature = (
+        /,
+        dst,
+    ))]
+    fn copy_to_py(&self, dst: String) -> PyResult<()> {
+        let dst: GlobalPath = dst.parse()?;
+        wrap_tokio(self.copy_to(&dst)).map_err(Into::into)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GlobalPath {
     pub dataset: DatasetPath,
     pub rel: PathBuf,
@@ -77,48 +130,16 @@ impl FromStr for GlobalPath {
 impl GlobalPath {
     pub fn from_local(rel: PathBuf) -> Self {
         Self {
-            dataset: DatasetPath {
-                scheme: Scheme::Local,
-                name: "localhost".into(),
-            },
+            dataset: DatasetPath::local(),
             rel,
         }
     }
 
-    pub async fn open_table(
-        &self,
-        catalog: &DatasetCatalog,
-    ) -> Result<(DeltaTable, SendableRecordBatchStream)> {
-        match self.dataset.scheme {
-            Scheme::Local => bail!("Local filesystem does not support CDL rootfs table"),
-            Scheme::S3A => open_table(catalog, &self.dataset).await,
-        }
-    }
-
-    pub async fn copy_all(&self, catalog: &DatasetCatalog, dst: &Self) -> Result<()> {
-        let stream = self.load_all_as_stream(catalog).await?;
-        dst.dump_all(catalog, stream).await
-    }
-
-    async fn load_all_as_stream<'a>(
-        &'a self,
-        catalog: &'a DatasetCatalog,
-    ) -> Result<Pin<Box<dyn 'a + Stream<Item = Result<FileRecord>>>>> {
-        match self.dataset.scheme {
-            Scheme::Local => Ok(Box::pin(FileRecord::load_all(catalog, &self.rel).await?)),
-            Scheme::S3A => {
-                let (_, stream) = open_table(&catalog, &self.dataset).await?;
-                let stream = stream
-                    .map(|batch| {
-                        batch
-                            .map_err(Into::into)
-                            .and_then(FileRecordBatch::try_from)
-                            .map(FileRecordBatch::into_stream)
-                    })
-                    .try_flatten();
-                Ok(Box::pin(stream))
-            }
-        }
+    pub async fn open(self, catalog: DatasetCatalog) -> Result<CdlFS> {
+        Ok(CdlFS {
+            catalog,
+            path: self,
+        })
     }
 
     async fn dump_all(
@@ -129,7 +150,7 @@ impl GlobalPath {
         match self.dataset.scheme {
             Scheme::Local => FileRecord::dump_all(&self.rel, stream).await,
             Scheme::S3A => {
-                let table = create_table(&catalog, &self.dataset).await?;
+                let table = create_table(catalog, &self.dataset).await?;
                 let schema: SchemaRef = Arc::new(table.get_schema()?.try_into()?);
 
                 let writer_properties = WriterProperties::builder()
@@ -223,12 +244,21 @@ impl GlobalPath {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DatasetPath {
     pub scheme: Scheme,
     pub name: String,
 }
 
 impl DatasetPath {
+    #[inline]
+    fn local() -> Self {
+        DatasetPath {
+            scheme: Scheme::Local,
+            name: "localhost".into(),
+        }
+    }
+
     pub fn to_uri(&self, mut rel: &str) -> String {
         match self.scheme {
             Scheme::Local => rel.into(),
@@ -244,6 +274,7 @@ impl DatasetPath {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "pyo3", pyclass(eq, eq_int))]
 pub enum Scheme {
     Local,
     S3A,
@@ -464,6 +495,7 @@ impl FileRecordBuilder {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FileRecord<T = Vec<u8>> {
     pub name: String,
     pub parent: Option<String>,
@@ -472,6 +504,115 @@ pub struct FileRecord<T = Vec<u8>> {
     pub chunk_offset: u64,
     pub chunk_size: u64,
     pub data: T,
+}
+
+#[cfg(feature = "pyo3")]
+#[pyclass(name = "FileRecord", subclass)]
+#[repr(transparent)]
+pub struct FileRecordRefPy(FileRecordRef);
+
+pub type FileRecordRef = FileRecord<()>;
+
+impl FileRecordRef {
+    #[instrument(skip(catalog))]
+    async fn load<'a>(
+        catalog: &'a DatasetCatalog,
+        root: PathBuf,
+        path: &Path,
+    ) -> impl 'a + Stream<Item = Result<Self>> {
+        let bail = |error: Error| stream::iter(vec![Err(error)]);
+
+        let mut file = match fs::File::open(path).await {
+            Ok(file) => file,
+            Err(error) => return bail(error.into()),
+        };
+        let metadata = match file.metadata().await {
+            Ok(metadata) => metadata,
+            Err(error) => return bail(error.into()),
+        };
+
+        if metadata.is_symlink() || !metadata.is_file() {
+            return stream::iter(Vec::default());
+        }
+
+        let name = match path.file_name() {
+            Some(name) => name.to_string_lossy().to_string(),
+            None => return bail(anyhow!("Empty file name: {path:?}")),
+        };
+        let parent = path
+            .parent()
+            .filter(|path| path.starts_with(&root))
+            .map(|path| path.to_string_lossy()[root.to_string_lossy().len()..].to_string());
+
+        let atime = DateTime::from_timestamp_nanos(metadata.atime_nsec());
+        let ctime = DateTime::from_timestamp_nanos(metadata.ctime_nsec());
+        let mtime = DateTime::from_timestamp_nanos(metadata.mtime_nsec());
+        let mode = metadata.mode();
+        let size = metadata.size();
+
+        let mut metadata = Some(FileMetadataRecord {
+            atime,
+            ctime,
+            mtime,
+            mode,
+            size,
+        });
+
+        if catalog.max_chunk_size == 0 {
+            return bail(anyhow!("Max chunk size should be positive"));
+        }
+        let chunk_ids = match size {
+            0 => 0..=0,
+            size => 0..=((size - 1) / catalog.max_chunk_size),
+        };
+
+        let mut files = Vec::with_capacity(*chunk_ids.end() as _);
+        for chunk_id in chunk_ids {
+            let chunk_offset = chunk_id * catalog.max_chunk_size;
+            let chunk_size = size.min((chunk_id + 1) * catalog.max_chunk_size) - chunk_offset;
+            let mut data = vec![0; chunk_size as _];
+            let maybe_file = match file.read_exact(&mut data).await {
+                Ok(_) => Ok(Self {
+                    name: name.clone(),
+                    parent: parent.clone(),
+                    metadata: metadata.take(),
+                    chunk_id,
+                    chunk_offset,
+                    chunk_size,
+                    data: (),
+                }),
+                Err(error) => Err(error.into()),
+            };
+            files.push(maybe_file)
+        }
+        stream::iter(files)
+    }
+
+    #[instrument(skip_all, err(level = Level::ERROR))]
+    async fn load_all<'a>(
+        catalog: &'a DatasetCatalog,
+        root: &'a Path,
+    ) -> Result<impl 'a + Stream<Item = Result<Self>>> {
+        let root = fs::canonicalize(root).await?;
+        let pattern = format!("{}/**/*", root.to_string_lossy());
+        let list = glob(&pattern).with_context(|| format!("Failed to list files on {root:?}"))?;
+        Ok(list
+            .into_iter()
+            .filter_map(|path| path.ok())
+            .map(|path| {
+                let root = root.clone();
+                async move { Self::load(catalog, root, &path).await }
+            })
+            .collect::<stream::FuturesOrdered<_>>()
+            .flatten())
+    }
+}
+
+#[cfg(feature = "pyo3")]
+#[pyclass(name = "FileRecord", extends = FileRecordRefPy)]
+pub struct FileRecordPy {
+    base: FileRecordRefPy,
+    data: Vec<u8>,
 }
 
 impl FileRecord {
@@ -687,6 +828,8 @@ impl FileRecord {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "pyo3", pyclass)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FileMetadataRecord {
     pub atime: DateTime<Utc>,
     pub ctime: DateTime<Utc>,
@@ -723,6 +866,7 @@ async fn open_table(
     if ops.0.state.is_none() {
         bail!("Empty storage")
     }
+
     ops.load()
         .await
         .with_context(|| format!("Cannot open a rootfs table on {uri:?}"))
@@ -735,4 +879,4 @@ async fn create_delta_ops(catalog: &DatasetCatalog, uri: &str) -> Result<DeltaOp
         .with_context(|| format!("Cannot init a rootfs table on {uri:?}"))
 }
 
-const DIR_ROOTFS: &str = "rootfs";
+pub const DIR_ROOTFS: &str = "rootfs";

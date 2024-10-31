@@ -1,6 +1,6 @@
 [workspace]
 default-members = ["crates/cdl"]
-members = ["crates/*"]
+members = ["crates/*", "python"]
 exclude = ["crates/target"]
 resolver = "2"
 
@@ -13,7 +13,7 @@ include = ["src/**/*.rs", "Cargo.toml"]
 keywords = ["cdl", "data-lake", "kubernetes"]
 license = "AGPL-3.0-or-later"
 readme = "./README.md"
-rust-version = "1.82"
+rust-version = "1.84"
 homepage = "https://github.com/ulagbulag/connected-data-lake"
 repository = "https://github.com/ulagbulag/connected-data-lake"
 version = "0.1.0"
@@ -34,7 +34,13 @@ fuser = { version = "0.15" }
 futures = { version = "0.3" }
 glob = { version = "0.3" }
 libc = { version = "0.2" }
-polars = { version = "0.44" }
+pyo3 = { version = "0.22", features = [
+    "anyhow",
+    "experimental-inspect",
+    "macros",
+] }
+serde = { version = "1.0" }
+strum = { version = "0.26" }
 tokio = { version = "1" }
 tracing = { version = "0.1" }
 url = { version = "2.5" }

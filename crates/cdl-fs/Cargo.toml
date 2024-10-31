@@ -21,6 +21,8 @@ workspace = true
 
 [features]
 default = []
+pyo3 = ["cdl-core/pyo3", "dep:pyo3"]
+serde = ["dep:serde"]
 
 # TLS
 openssl-tls = ["cdl-catalog/openssl-tls", "deltalake/s3-native-tls"]
@@ -28,6 +30,7 @@ rustls-tls = ["cdl-catalog/openssl-tls", "deltalake/s3"]
 
 [dependencies]
 cdl-catalog = { path = "../cdl-catalog" }
+cdl-core = { path = "../cdl-core", optional = true }
 
 anyhow = { workspace = true }
 chrono = { workspace = true }
@@ -35,5 +38,7 @@ deltalake = { workspace = true, features = ["datafusion"] }
 filetime = { workspace = true }
 futures = { workspace = true }
 glob = { workspace = true }
+pyo3 = { workspace = true, optional = true }
+serde = { workspace = true, optional = true, features = ["derive"] }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }

@@ -1,9 +1,9 @@
 [package]
-name = "cdl"
+name = "cdl-python"
 
 authors = { workspace = true }
 description = { workspace = true }
-documentation = "https://docs.rs/cdl"
+documentation = "https://docs.rs/cdl-python"
 edition = { workspace = true }
 include = { workspace = true }
 keywords = { workspace = true }
@@ -17,6 +17,11 @@ version = { workspace = true }
 [lints]
 workspace = true
 
+[lib]
+name = "cdlake"
+crate-type = ["cdylib"]
+doc = false
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
@@ -24,24 +29,28 @@ default = ["default-tls"]
 
 # TLS
 default-tls = ["rustls-tls"]
-openssl-tls = [
-    "cdl-catalog/openssl-tls",
-    "cdl-fs/openssl-tls",
-    "cdl-fuse/openssl-tls",
-]
-rustls-tls = [
-    "cdl-catalog/rustls-tls",
-    "cdl-fs/rustls-tls",
-    "cdl-fuse/openssl-tls",
-]
+openssl-tls = ["cdl-catalog/openssl-tls", "cdl-fs/openssl-tls"]
+rustls-tls = ["cdl-catalog/rustls-tls", "cdl-fs/rustls-tls"]
 
 [dependencies]
-cdl-catalog = { path = "../cdl-catalog" }
-cdl-fs = { path = "../cdl-fs" }
-cdl-fuse = { path = "../cdl-fuse" }
+cdl-catalog = { path = "../crates/cdl-catalog", features = ["pyo3"] }
+cdl-core = { path = "../crates/cdl-core", features = ["pyo3"] }
+cdl-fs = { path = "../crates/cdl-fs", features = ["pyo3"] }
 
 anyhow = { workspace = true }
 ark-core = { workspace = true }
 clap = { workspace = true }
+pyo3 = { workspace = true, features = [
+    "abi3-py312",
+    "anyhow",
+    "chrono",
+    "chrono-tz",
+    "experimental-async",
+    "extension-module",
+    "macros",
+    "nightly",
+    "py-clone",
+    "serde",
+] }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }

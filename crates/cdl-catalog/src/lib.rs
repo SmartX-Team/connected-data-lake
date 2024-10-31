@@ -1,14 +1,22 @@
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, ops, str::FromStr};
 
+#[cfg(feature = "pyo3")]
+use anyhow::Error;
 use clap::{Parser, ValueEnum};
 use deltalake::{
     parquet::{basic, file::properties::EnabledStatistics},
     DeltaResult,
 };
+#[cfg(feature = "pyo3")]
+use pyo3::{pyclass, pymethods, PyResult};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+use strum::{Display, EnumString};
 use tracing::info;
-use url::Url;
 
 #[derive(Clone, Debug, PartialEq, Parser)]
+#[cfg_attr(feature = "pyo3", pyclass(eq))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DatasetCatalog {
     /// A compression method applied when storing data in backend storage.
     #[arg(
@@ -69,11 +77,13 @@ pub struct DatasetCatalog {
 }
 
 impl DatasetCatalog {
+    #[allow(clippy::identity_op)]
     #[inline]
     pub const fn default_max_buffer_size() -> u64 {
         1 * 1024 * 1024 * 1024 // 1 GB
     }
 
+    #[allow(clippy::identity_op)]
     #[inline]
     pub const fn default_max_chunk_size() -> u64 {
         256 * 1024 // 256 KB
@@ -93,7 +103,7 @@ impl DatasetCatalog {
 impl DatasetCatalog {
     pub fn init(&self) {
         info!("Registering store: S3");
-        ::deltalake::aws::register_handlers(Some(self.s3_endpoint.clone()))
+        ::deltalake::aws::register_handlers(Some(self.s3_endpoint.0.clone()))
     }
 
     pub fn storage_options(&self) -> HashMap<String, String> {
@@ -139,31 +149,72 @@ impl DatasetCatalog {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, ValueEnum)]
 #[allow(non_camel_case_types)]
+#[derive(Copy, Clone, Debug, Display, Default, PartialEq, Eq, Hash, EnumString, ValueEnum)]
+#[cfg_attr(feature = "pyo3", pyclass(eq, eq_int))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+#[strum(serialize_all = "kebab-case")]
 pub enum Compression {
-    BROTLI,
-    GZIP,
-    LZO,
-    LZ4,
-    LZ4_RAW,
+    BROTLI = 0,
+    GZIP = 1,
+    LZO = 2,
+    LZ4 = 3,
+    LZ4_RAW = 4,
     #[default]
-    SNAPPY,
-    UNCOMPRESSED,
-    ZSTD,
+    SNAPPY = 5,
+    UNCOMPRESSED = 6,
+    ZSTD = 7,
 }
 
-impl fmt::Display for Compression {
+#[allow(non_camel_case_types)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "pyo3", pyclass)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+#[repr(transparent)]
+pub struct Url(::url::Url);
+
+impl FromStr for Url {
+    type Err = ::url::ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        ::url::Url::from_str(s).map(Self)
+    }
+}
+
+impl fmt::Display for Url {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::BROTLI => "brotli".fmt(f),
-            Self::GZIP => "gzip".fmt(f),
-            Self::LZO => "lzo".fmt(f),
-            Self::LZ4 => "lz4".fmt(f),
-            Self::LZ4_RAW => "lz4-raw".fmt(f),
-            Self::SNAPPY => "snappy".fmt(f),
-            Self::UNCOMPRESSED => "none".fmt(f),
-            Self::ZSTD => "zstd".fmt(f),
-        }
+        self.0.fmt(f)
+    }
+}
+
+impl ops::Deref for Url {
+    type Target = ::url::Url;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl ops::DerefMut for Url {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(feature = "pyo3")]
+#[pymethods]
+impl Url {
+    #[new]
+    #[pyo3(signature = (
+        /,
+        url,
+    ))]
+    fn new(url: &str) -> PyResult<Self> {
+        url.parse().map_err(|error| Error::from(error).into())
     }
 }

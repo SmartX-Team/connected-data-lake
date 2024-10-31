@@ -1,0 +1,47 @@
+[build-system]
+requires = ["maturin>=1,<2"]
+build-backend = "maturin"
+
+[project]
+name = "cdlake"
+description = "Connected Data Lake Framework"
+readme = "../README.md"
+license = { file = "../LICENSE" }
+requires-python = ">=3.12"
+keywords = ["cdl", "cdlake", "connecteddatalake", "datalake"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = []
+
+[project.optional-dependencies]
+
+[project.urls]
+documentation = "https://github.com/ulagbulag/connected-data-lake"
+repository = "https://github.com/ulagbulag/connected-data-lake"
+
+[tool.coverage.run]
+branch = true
+source = ["cdlake"]
+
+[tool.maturin]
+module-name = "cdlake._internal"
+
+[tool.mypy]
+files = "cdlake/*.py"
+exclude = ["^examples", "^tests"]
+mypy_path = "./stubs"
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+implicit_reexport = true
+no_implicit_optional = true
+strict_equality = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = false

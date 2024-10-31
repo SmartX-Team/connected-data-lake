@@ -38,30 +38,6 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 deltalake = { workspace = true, features = ["datafusion"] }
 fuser = { workspace = true }
-futures = { workspace = true }
 libc = { workspace = true }
-polars = { workspace = true, features = [
-    "async",
-    "chunked_ids",
-    "diff",
-    "dtype-datetime",
-    "fmt",
-    "lazy",
-    "merge_sorted",
-    "parquet",
-    "partition_by",
-    "performant",
-    "range",
-    "regex",
-    "rows",
-    "search_sorted",
-    "sign",
-    "simd",
-    "sql",
-    "streaming",
-    "strings",
-    "temporal",
-    "timezones",
-] }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }

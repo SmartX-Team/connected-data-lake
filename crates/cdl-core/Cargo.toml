@@ -1,5 +1,5 @@
 [package]
-name = "cdl-catalog"
+name = "cdl-core"
 
 authors = { workspace = true }
 description = { workspace = true }
@@ -21,19 +21,7 @@ workspace = true
 
 [features]
 default = []
-pyo3 = ["dep:anyhow", "dep:pyo3"]
-serde = ["dep:serde"]
-
-# TLS
-openssl-tls = ["deltalake/s3-native-tls"]
-rustls-tls = ["deltalake/s3"]
+pyo3 = ["tokio/full"]
 
 [dependencies]
-anyhow = { workspace = true, optional = true }
-clap = { workspace = true }
-deltalake = { workspace = true }
-pyo3 = { workspace = true, optional = true }
-serde = { workspace = true, optional = true, features = ["derive"] }
-strum = { workspace = true, features = ["derive"] }
-tracing = { workspace = true }
-url = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }

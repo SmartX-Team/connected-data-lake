@@ -1,21 +1,22 @@
-use std::{ffi::OsStr, time::SystemTime};
+use std::{ffi::OsStr, sync::Arc, time::SystemTime};
 
 use anyhow::Result;
 use cdl_catalog::DatasetCatalog;
-use cdl_fs::GlobalPath;
-use deltalake::DeltaTable;
+use cdl_fs::{GlobalPath, DIR_ROOTFS};
+use deltalake::{datafusion::prelude::SessionContext, DeltaTable};
 use fuser::{
     Filesystem, KernelConfig, ReplyAttr, ReplyBmap, ReplyCreate, ReplyData, ReplyDirectory,
     ReplyDirectoryPlus, ReplyEmpty, ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen,
     ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
 };
-use futures::executor::block_on;
 use libc::{c_int, ENOSYS, EPERM};
+use tokio::runtime::Handle;
 use tracing::{debug, instrument, warn, Level};
 
 pub struct CdlFS {
     catalog: DatasetCatalog,
-    table: DeltaTable,
+    handle: Handle,
+    table: Arc<DeltaTable>,
 }
 
 impl CdlFS {
@@ -23,14 +24,23 @@ impl CdlFS {
 
     #[instrument(skip_all, err(level = Level::ERROR))]
     pub async fn load(catalog: DatasetCatalog, path: GlobalPath) -> Result<Self> {
-        let (table, stream) = path.open_table(&catalog).await?;
-        Ok(Self { catalog, table })
+        let table = Arc::new(path.open(catalog).await?);
+
+        // let mut ctx = SessionContext::new();
+        // ctx.register_table(DIR_ROOTFS, table)?;
+
+        // let sql = format!("SELECT name, parent FROM {DIR_ROOTFS}");
+        // let df = ctx.sql(&sql).await?;
+        // let stream = df.execute_stream().await?;
+
+        todo!()
+        // Ok(Self { catalog, table })
     }
 }
 
 impl Filesystem for CdlFS {
     fn init(&mut self, _req: &Request<'_>, _config: &mut KernelConfig) -> Result<(), c_int> {
-        block_on(async {
+        self.handle.block_on(async {
             // self.table
         });
         Ok(())

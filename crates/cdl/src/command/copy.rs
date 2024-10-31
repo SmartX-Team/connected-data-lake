@@ -15,6 +15,7 @@ pub struct CopyArgs {
 impl CopyArgs {
     #[instrument(skip_all)]
     pub(super) async fn execute(self, catalog: DatasetCatalog) -> Result<()> {
-        self.from.copy_all(&catalog, &self.to).await
+        let fs = self.from.open(catalog).await?;
+        fs.copy_to(&self.to).await
     }
 }
