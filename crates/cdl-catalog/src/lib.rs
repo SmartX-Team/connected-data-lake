@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt, ops, str::FromStr};
 
 #[cfg(feature = "pyo3")]
 use anyhow::Error;
+use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use deltalake::{
     parquet::{basic, file::properties::EnabledStatistics},
@@ -20,7 +21,7 @@ use tracing::info;
 pub struct DatasetCatalog {
     /// A compression method applied when storing data in backend storage.
     #[arg(
-        long,
+        global=true, long,
         env = "CDL_COMPRESSION",
         default_value_t = Compression::default(),
     )]
@@ -35,7 +36,7 @@ pub struct DatasetCatalog {
     /// It is recommended to use the largest possible value
     /// that is supported simultaneously by multiple backend storages.
     #[arg(
-        long,
+        global=true, long,
         env = "CDL_MAX_BUFFER_SIZE",
         default_value_t = Self::default_max_buffer_size(),
     )]
@@ -45,35 +46,52 @@ pub struct DatasetCatalog {
     /// A larger value allows more data to be stored in a row,
     /// but requires the same amount of data to be transmitted when modifying the data.
     #[arg(
-        long,
+        global=true, long,
         env = "CDL_MAX_CHUNK_SIZE",
         default_value_t = Self::default_max_chunk_size(),
     )]
     pub max_chunk_size: u64,
 
     /// S3 access key.
-    #[arg(long, env = "AWS_ACCESS_KEY_ID")]
-    pub s3_access_key: String,
+    #[arg(global = true, long, env = "AWS_ACCESS_KEY_ID")]
+    pub s3_access_key: Option<String>,
 
     /// S3 region name.
     #[arg(
-        long,
+        global=true, long,
         env = "AWS_ENDPOINT_URL",
-        default_value = Self::default_s3_host(),
+        default_value = Self::default_s3_endpoint(),
     )]
     pub s3_endpoint: Url,
 
     /// S3 region name. Needed for AWS S3.
     #[arg(
-        long,
+        global=true, long,
         env = "AWS_REGION",
         default_value = Self::default_s3_region(),
     )]
     pub s3_region: String,
 
     /// S3 secret key.
-    #[arg(long, env = "AWS_SECRET_ACCESS_KEY")]
-    pub s3_secret_key: String,
+    #[arg(global = true, long, env = "AWS_SECRET_ACCESS_KEY")]
+    pub s3_secret_key: Option<String>,
+}
+
+impl Default for DatasetCatalog {
+    fn default() -> Self {
+        Self {
+            compression: Compression::default(),
+            compression_level: None,
+            max_buffer_size: Self::default_max_buffer_size(),
+            max_chunk_size: Self::default_max_chunk_size(),
+            s3_access_key: None,
+            s3_endpoint: Self::default_s3_endpoint()
+                .parse()
+                .expect("Invalid fallback s3 endpoint"),
+            s3_region: Self::default_s3_region().into(),
+            s3_secret_key: None,
+        }
+    }
 }
 
 impl DatasetCatalog {
@@ -90,7 +108,7 @@ impl DatasetCatalog {
     }
 
     #[inline]
-    pub const fn default_s3_host() -> &'static str {
+    pub const fn default_s3_endpoint() -> &'static str {
         "http://object-storage"
     }
 
@@ -106,19 +124,33 @@ impl DatasetCatalog {
         ::deltalake::aws::register_handlers(Some(self.s3_endpoint.0.clone()))
     }
 
-    pub fn storage_options(&self) -> HashMap<String, String> {
+    pub fn storage_options(&self) -> Result<HashMap<String, String>> {
         let allow_http = self.s3_endpoint.scheme() == "http";
+
+        fn get_arg<T>(arg: Option<&T>, name: &'static str) -> Result<T>
+        where
+            T: Clone,
+        {
+            arg.cloned()
+                .with_context(|| format!("Missing catalog config: {name}"))
+        }
+
+        macro_rules! get_arg {
+            ( $name:ident ) => {{
+                get_arg(self.$name.as_ref(), stringify!($name))
+            }};
+        }
 
         let mut options = HashMap::default();
         options.insert("allow_http".into(), allow_http.to_string());
-        options.insert("AWS_ACCESS_KEY_ID".into(), self.s3_access_key.clone());
+        options.insert("AWS_ACCESS_KEY_ID".into(), get_arg!(s3_access_key)?);
         options.insert("AWS_ALLOW_HTTP".into(), allow_http.to_string());
         options.insert("AWS_EC2_METADATA_DISABLED".into(), true.to_string());
         options.insert("AWS_ENDPOINT_URL".into(), self.s3_endpoint.to_string());
         options.insert("AWS_REGION".into(), self.s3_region.clone());
-        options.insert("AWS_SECRET_ACCESS_KEY".into(), self.s3_secret_key.clone());
+        options.insert("AWS_SECRET_ACCESS_KEY".into(), get_arg!(s3_secret_key)?);
         options.insert("conditional_put".into(), "etag".into());
-        options
+        Ok(options)
     }
 
     pub fn compression(&self) -> DeltaResult<basic::Compression> {

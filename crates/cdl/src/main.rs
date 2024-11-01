@@ -12,8 +12,9 @@ async fn main() {
     ::ark_core::tracer::init_once();
     info!("Welcome to Connected Data Lake!");
 
-    if let Err(error) = try_main(args).await {
-        error!("{error}");
+    match try_main(args).await {
+        Ok(()) => info!("Done"),
+        Err(error) => error!("{error}"),
     }
 }
 

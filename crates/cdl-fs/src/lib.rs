@@ -17,7 +17,9 @@ use deltalake::{
     },
     datafusion::{
         execution::SendableRecordBatchStream,
-        prelude::{DataFrame, SessionConfig, SessionContext},
+        logical_expr::Volatility,
+        physical_plan::functions::make_scalar_function,
+        prelude::{create_udf, DataFrame, SessionConfig, SessionContext},
     },
     kernel::{Action, DataType, PrimitiveType, StructField},
     operations::transaction::CommitBuilder,
@@ -53,6 +55,15 @@ impl CdlFS {
     }
 
     #[instrument(skip_all, err(level = Level::ERROR))]
+    pub async fn query(&self, sql: &str) -> Result<DataFrame> {
+        self.ctx()
+            .await?
+            .sql(sql)
+            .await
+            .context("Failed to query CDL rootfs table")
+    }
+
+    #[instrument(skip_all, err(level = Level::ERROR))]
     pub async fn read_dir(&self, path: impl AsRef<Path>) -> Result<SendableRecordBatchStream> {
         let parent = trim_rel_suffix(path.as_ref().to_str().context("Invalid path")?);
         let condition =
@@ -78,21 +89,28 @@ impl CdlFS {
                 format!("name = '{name}' AND parent = '{parent}'")
             })
             .join(" OR ");
-        let condition =
-            format!("WHERE {condition_name} ORDER BY parent ASC, name ASC, chunk_id ASC");
+        // let condition =
+        //     format!("WHERE {condition_name} ORDER BY parent ASC, name ASC, chunk_id ASC");
+        // let condition = format!("ORDER BY parent ASC, name ASC, chunk_id ASC");
+        // let condition = "";
+        let condition = format!("WHERE {condition_name} ORDER BY RANDOM()");
 
         info!("{}", 1);
         let stream = self.load_by(&condition).await?;
         info!("{}", 2);
-        let files: Vec<_> = stream
-            .map_ok(|d| {
-                info!("{}", 2.1);
-                d
-            })
-            .try_collect()
-            .await?;
-        info!("{}", 3);
-        info!("{}", files[0].num_rows());
+        // let files: Vec<_> = stream
+        //     .map_ok(|d| {
+        //         info!("{}", 2.1);
+        //         d
+        //     })
+        //     .try_collect()
+        //     .await?;
+        // info!("{}", 3);
+        // info!("{}", files[0].num_rows());
+        let mut stream = stream;
+        while let Some(d) = stream.try_next().await? {
+            info!("{}", 2.1);
+        }
         todo!();
         Ok(stream::empty())
     }
@@ -152,24 +170,29 @@ impl CdlFS {
 
     #[inline]
     async fn load_by(&self, condition: &str) -> Result<SendableRecordBatchStream> {
+        // let sql = format!("SELECT parent, name, COUNT(data) AS combined_data FROM {DIR_ROOTFS} GROUP BY parent, name ORDER BY RANDOM()");
+        let sql = format!("SELECT parent, name, COUNT(data) AS combined_data FROM {DIR_ROOTFS} GROUP BY parent, name");
+        info!("Querying LOAD: {sql}");
+
+        let df = self.query(&sql).await?;
+        let mut stream = df
+            .execute_stream()
+            .await
+            .context("Failed to execute the dataframe")?;
+        while let Some(d) = stream.try_next().await? {
+            info!("Incoming: {}", d.num_rows());
+        }
+        info!("Completed");
+
+        todo!();
+
         let sql = format!("SELECT * FROM {DIR_ROOTFS} {condition}");
         info!("Querying LOAD: {sql}");
 
         let df = self.query(&sql).await?;
-        let df = df.limit(0, Some(1))?;
-        info!("{}", df.clone().count().await?);
-        info!("{}", df.clone().collect().await?.len());
         df.execute_stream()
             .await
             .context("Failed to execute the dataframe")
-    }
-
-    async fn query(&self, sql: &str) -> Result<DataFrame> {
-        self.ctx()
-            .await?
-            .sql(sql)
-            .await
-            .context("Failed to query CDL rootfs table")
     }
 
     async fn table(&self) -> Result<DeltaTable> {
@@ -240,14 +263,42 @@ impl GlobalPath {
     pub async fn open(self, catalog: DatasetCatalog) -> Result<CdlFS> {
         let mut config = SessionConfig::new();
         {
-            let mut options = config.options_mut();
+            let options = config.options_mut();
             options.execution.parquet.metadata_size_hint = Some(catalog.max_buffer_size as _);
             options.execution.parquet.pushdown_filters = true;
+            options.execution.parquet.reorder_filters = true;
+            options.execution.target_partitions = 1;
         }
+        let ctx: SessionContext = SessionContext::new_with_config(config);
+
+        // 함수 정의
+        fn byte_length(
+            args: &[ArrayRef],
+        ) -> Result<ArrayRef, deltalake::datafusion::error::DataFusionError> {
+            let binary_array = args[0]
+                .as_any()
+                .downcast_ref::<array::BinaryArray>()
+                .expect("expected binary array");
+            let result: array::UInt32Array = binary_array
+                .iter()
+                .map(|maybe_value| maybe_value.map(|value| value.len() as u32))
+                .collect();
+            Ok(Arc::new(result))
+        }
+
+        // 사용자 정의 함수 등록
+        let byte_length_udf = create_udf(
+            "byte_length",                                           // 함수 이름
+            vec![deltalake::arrow::datatypes::DataType::Binary],     // 입력 데이터 타입
+            Arc::new(deltalake::arrow::datatypes::DataType::UInt32), // 출력 데이터 타입
+            Volatility::Immutable,
+            make_scalar_function(byte_length),
+        );
+        ctx.register_udf(byte_length_udf);
 
         Ok(CdlFS {
             catalog,
-            ctx: SessionContext::new_with_config(config),
+            ctx,
             path: self,
         })
     }
@@ -867,7 +918,7 @@ async fn open_table(
 
 #[instrument(skip(catalog))]
 async fn create_delta_ops(catalog: &DatasetCatalog, uri: &str) -> Result<DeltaOps> {
-    DeltaOps::try_from_uri_with_storage_options(uri, catalog.storage_options())
+    DeltaOps::try_from_uri_with_storage_options(uri, catalog.storage_options()?)
         .await
         .with_context(|| format!("Cannot init a rootfs table on {uri:?}"))
 }

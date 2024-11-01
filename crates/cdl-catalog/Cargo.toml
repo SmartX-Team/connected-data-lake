@@ -21,7 +21,7 @@ workspace = true
 
 [features]
 default = []
-pyo3 = ["dep:anyhow", "dep:pyo3"]
+pyo3 = ["dep:pyo3"]
 serde = ["dep:serde"]
 
 # TLS
@@ -29,7 +29,7 @@ openssl-tls = ["deltalake/s3-native-tls"]
 rustls-tls = ["deltalake/s3"]
 
 [dependencies]
-anyhow = { workspace = true, optional = true }
+anyhow = { workspace = true }
 clap = { workspace = true }
 deltalake = { workspace = true }
 pyo3 = { workspace = true, optional = true }

@@ -92,10 +92,25 @@ impl CdlFS {
         /,
     ))]
     fn read_files(&self, files: PyArrowType<RecordBatch>) -> PyResult<Vec<Vec<u8>>> {
-        wrap_tokio(async {
-            let stream = self.0.read_files(&files.0).await?;
-            stream.map_ok(|record| record.data).try_collect().await
-        })
+        wrap_tokio(
+            self.0
+                .read_files(&files.0)
+                .and_then(|stream| stream.map_ok(|record| record.data).try_collect()),
+        )
+        .map_err(Into::into)
+    }
+
+    #[pyo3(signature = (
+        sql,
+        /,
+    ))]
+    fn sql(&self, sql: &str) -> PyResult<PyArrowType<RecordBatch>> {
+        wrap_tokio(
+            self.0
+                .query(sql)
+                .and_then(|df| df.execute_stream().map_err(Into::into))
+                .and_then(|stream| collect_batches(stream, "sql results")),
+        )
         .map_err(Into::into)
     }
 }

@@ -38,6 +38,8 @@ class CdlFS:
 
     def read_files(self, files: pa.RecordBatch, /) -> list[bytes]: ...
 
+    def sql(self, sql: str, /) -> pa.RecordBatch: ...
+
 
 class Cdl:
     def __init__(
