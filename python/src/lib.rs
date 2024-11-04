@@ -2,7 +2,7 @@ use std::{future::Future, sync::OnceLock};
 
 use anyhow::{Context, Error, Result};
 use cdl_catalog::{Compression, DatasetCatalog, Url};
-use cdl_fs::GlobalPath;
+use cdl_fs::{register_handlers, GlobalPath};
 use clap::Parser;
 use deltalake::{
     arrow::{array::RecordBatch, compute::concat_batches, pyarrow::PyArrowType},
@@ -30,7 +30,7 @@ impl Cdl {
             Some(catalog) => catalog,
             None => DatasetCatalog::try_parse_from::<[_; 0], &str>([]).map_err(Error::from)?,
         };
-        catalog.init();
+        register_handlers();
 
         Ok(Self { catalog })
     }

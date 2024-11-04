@@ -1,9 +1,9 @@
 [package]
-name = "cdl-catalog"
+name = "cdl-store"
 
 authors = { workspace = true }
 description = { workspace = true }
-documentation = "https://docs.rs/cdl-catalog"
+documentation = "https://docs.rs/cdl-log-store"
 edition = { workspace = true }
 include = { workspace = true }
 keywords = { workspace = true }
@@ -21,18 +21,19 @@ workspace = true
 
 [features]
 default = []
-pyo3 = ["dep:pyo3"]
-serde = ["dep:serde"]
 
 # TLS
-openssl-tls = ["deltalake/s3-native-tls"]
-rustls-tls = ["deltalake/s3"]
+openssl-tls = ["cdl-catalog/openssl-tls", "deltalake/s3-native-tls"]
+rustls-tls = ["cdl-catalog/openssl-tls", "deltalake/s3"]
 
 [dependencies]
-anyhow = { workspace = true }
-clap = { workspace = true }
-deltalake = { workspace = true }
-pyo3 = { workspace = true, optional = true }
-serde = { workspace = true, optional = true, features = ["derive"] }
-strum = { workspace = true, features = ["derive"] }
+cdl-catalog = { path = "../cdl-catalog" }
+
+async-trait = { workspace = true }
+bytes = { workspace = true }
+deltalake = { workspace = true, features = ["datafusion"] }
+futures = { workspace = true }
+glob = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
+tracing = { workspace = true }
 url = { workspace = true }

@@ -13,7 +13,7 @@ include = ["src/**/*.rs", "Cargo.toml"]
 keywords = ["cdl", "data-lake", "kubernetes"]
 license = "AGPL-3.0-or-later"
 readme = "./README.md"
-rust-version = "1.84"
+rust-version = "1.82"
 homepage = "https://github.com/ulagbulag/connected-data-lake"
 repository = "https://github.com/ulagbulag/connected-data-lake"
 version = "0.1.0"
@@ -26,6 +26,7 @@ ark-core = { git = "https://github.com/ulagbulag/OpenARK" }
 
 anyhow = { version = "1.0", features = ["backtrace"] }
 async-trait = { version = "0.1" }
+bytes = { version = "1.8" }
 chrono = { version = "0.4" }
 clap = { version = "4.5", features = ["derive", "env", "string", "unicode"] }
 deltalake = { version = "0.21" }

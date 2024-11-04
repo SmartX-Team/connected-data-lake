@@ -24,11 +24,20 @@ default = []
 serde = ["dep:serde"]
 
 # TLS
-openssl-tls = ["cdl-catalog/openssl-tls", "deltalake/s3-native-tls"]
-rustls-tls = ["cdl-catalog/openssl-tls", "deltalake/s3"]
+openssl-tls = [
+    "cdl-catalog/openssl-tls",
+    "cdl-store/openssl-tls",
+    "deltalake/s3-native-tls",
+]
+rustls-tls = [
+    "cdl-catalog/openssl-tls",
+    "cdl-store/openssl-tls",
+    "deltalake/s3",
+]
 
 [dependencies]
 cdl-catalog = { path = "../cdl-catalog" }
+cdl-store = { path = "../cdl-store" }
 
 anyhow = { workspace = true }
 chrono = { workspace = true }

@@ -23,10 +23,11 @@ class DatasetCatalog:
     compression_level: int | None = None
     max_buffer_size: int
     max_chunk_size: int
-    s3_access_key: str
+    max_write_threads: int
+    s3_access_key: str | None = None
     s3_endpoint: Url
     s3_region: str
-    s3_secret_key: str
+    s3_secret_key: str | None = None
 
 
 class CdlFS:

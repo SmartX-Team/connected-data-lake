@@ -42,7 +42,7 @@ clap = { workspace = true }
 deltalake = { workspace = true, features = ["python"] }
 futures = { workspace = true }
 pyo3 = { workspace = true, features = [
-    "abi3-py312",
+    "abi3-py310",
     "anyhow",
     "chrono",
     "chrono-tz",

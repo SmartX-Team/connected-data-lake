@@ -5,15 +5,17 @@ build-backend = "maturin"
 [project]
 name = "cdlake"
 description = "Connected Data Lake Framework"
-readme = "../README.md"
-license = { file = "../LICENSE" }
-requires-python = ">=3.12"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
 keywords = ["cdl", "cdlake", "connecteddatalake", "datalake"]
 classifiers = [
     "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = []
+dependencies = ["pyarrow"]
 
 [project.optional-dependencies]
 
@@ -30,7 +32,7 @@ module-name = "cdlake._internal"
 
 [tool.mypy]
 files = "cdlake/*.py"
-exclude = ["^examples", "^tests"]
+exclude = ["^cache", "^examples", "^tests"]
 mypy_path = "./stubs"
 disallow_any_generics = true
 disallow_subclassing_any = true

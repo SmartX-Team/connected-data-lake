@@ -24,6 +24,7 @@ Cargo.lock
 /.vscode/
 
 # Temporary files
+**/cache
 **/dst
 /rootfs
 /test

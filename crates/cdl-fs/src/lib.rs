@@ -1,14 +1,20 @@
+mod functions;
+
 use std::{
     io::SeekFrom,
-    os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
     pin::Pin,
     str::FromStr,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::Duration,
 };
 
 use anyhow::{anyhow, bail, Context, Error, Result};
 use cdl_catalog::DatasetCatalog;
+pub use cdl_store::register_handlers;
 use chrono::{DateTime, Timelike, Utc};
 use deltalake::{
     arrow::{
@@ -17,9 +23,7 @@ use deltalake::{
     },
     datafusion::{
         execution::SendableRecordBatchStream,
-        logical_expr::Volatility,
-        physical_plan::functions::make_scalar_function,
-        prelude::{create_udf, DataFrame, SessionConfig, SessionContext},
+        prelude::{DataFrame, SessionConfig, SessionContext},
     },
     kernel::{Action, DataType, PrimitiveType, StructField},
     operations::transaction::CommitBuilder,
@@ -38,6 +42,7 @@ use tokio::{
     fs,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     spawn, sync,
+    time::sleep,
 };
 use tracing::{debug, info, instrument, Level};
 
@@ -56,11 +61,7 @@ impl CdlFS {
 
     #[instrument(skip_all, err(level = Level::ERROR))]
     pub async fn query(&self, sql: &str) -> Result<DataFrame> {
-        self.ctx()
-            .await?
-            .sql(sql)
-            .await
-            .context("Failed to query CDL rootfs table")
+        self.ctx().await?.sql(sql).await.map_err(Into::into)
     }
 
     #[instrument(skip_all, err(level = Level::ERROR))]
@@ -270,31 +271,7 @@ impl GlobalPath {
             options.execution.target_partitions = 1;
         }
         let ctx: SessionContext = SessionContext::new_with_config(config);
-
-        // 함수 정의
-        fn byte_length(
-            args: &[ArrayRef],
-        ) -> Result<ArrayRef, deltalake::datafusion::error::DataFusionError> {
-            let binary_array = args[0]
-                .as_any()
-                .downcast_ref::<array::BinaryArray>()
-                .expect("expected binary array");
-            let result: array::UInt32Array = binary_array
-                .iter()
-                .map(|maybe_value| maybe_value.map(|value| value.len() as u32))
-                .collect();
-            Ok(Arc::new(result))
-        }
-
-        // 사용자 정의 함수 등록
-        let byte_length_udf = create_udf(
-            "byte_length",                                           // 함수 이름
-            vec![deltalake::arrow::datatypes::DataType::Binary],     // 입력 데이터 타입
-            Arc::new(deltalake::arrow::datatypes::DataType::UInt32), // 출력 데이터 타입
-            Volatility::Immutable,
-            make_scalar_function(byte_length),
-        );
-        ctx.register_udf(byte_length_udf);
+        ctx.register_udf(crate::functions::len::Udf::new());
 
         Ok(CdlFS {
             catalog,
@@ -340,6 +317,7 @@ impl GlobalPath {
                 }
 
                 let mut builder = FileRecordBuilder::default();
+                let num_running_tasks = Arc::new(AtomicUsize::default());
                 let mut stream = Box::pin(stream);
                 let mut tasks = Vec::default();
                 let writer = Arc::new(sync::Mutex::new(Writer {
@@ -347,15 +325,32 @@ impl GlobalPath {
                     count: 0,
                     inner: writer,
                 }));
+
+                let wait_for_commit = || async {
+                    while num_running_tasks.load(Ordering::SeqCst) >= catalog.max_write_threads {
+                        sleep(Duration::from_millis(10)).await;
+                    }
+                    num_running_tasks.fetch_add(1, Ordering::SeqCst);
+                };
+                let mut commit = |batch| {
+                    let num_running_tasks = num_running_tasks.clone();
+                    let writer = writer.clone();
+                    tasks.push(spawn(async move {
+                        let result = writer.lock().await.write(batch).await;
+                        num_running_tasks.fetch_sub(1, Ordering::SeqCst);
+                        result
+                    }));
+                };
+
                 while let Some(file) = stream.try_next().await? {
                     if let Some(batch) = builder.push(catalog, &schema, file)? {
-                        let writer = writer.clone();
-                        tasks.push(spawn(async move { writer.lock().await.write(batch).await }));
+                        wait_for_commit().await;
+                        commit(batch);
                     }
                 }
                 if let Some(batch) = builder.flush(&schema)? {
-                    let writer = writer.clone();
-                    tasks.push(spawn(async move { writer.lock().await.write(batch).await }));
+                    wait_for_commit().await;
+                    commit(batch);
                 }
                 let () = tasks
                     .into_iter()
@@ -443,7 +438,7 @@ impl FromStr for Scheme {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "s3a" => Ok(Self::S3A),
+            "s3" | "s3a" => Ok(Self::S3A),
             _ => bail!("Unknown scheme: {s:?}"),
         }
     }
@@ -698,32 +693,60 @@ impl FileRecord {
             None => return bail(anyhow!("Cannot find the parent directory: {path:?}")),
         };
 
-        let atime = DateTime::from_timestamp_nanos(metadata.atime_nsec());
-        let ctime = DateTime::from_timestamp_nanos(metadata.ctime_nsec());
-        let mtime = DateTime::from_timestamp_nanos(metadata.mtime_nsec());
-        let mode = metadata.mode();
-        let size = metadata.size();
+        #[cfg(unix)]
+        let mut metadata = Some({
+            use std::os::unix::fs::MetadataExt;
 
-        let mut metadata = Some(FileMetadataRecord {
-            atime,
-            ctime,
-            mtime,
-            mode,
-            size,
+            let atime = DateTime::from_timestamp_nanos(metadata.atime_nsec());
+            let ctime = DateTime::from_timestamp_nanos(metadata.ctime_nsec());
+            let mtime = DateTime::from_timestamp_nanos(metadata.mtime_nsec());
+            let mode = metadata.mode();
+            let size = metadata.size();
+
+            FileMetadataRecord {
+                atime,
+                ctime,
+                mtime,
+                mode,
+                size,
+            }
         });
 
-        if catalog.max_chunk_size == 0 {
-            return bail(anyhow!("Max chunk size should be positive"));
-        }
-        let chunk_ids = match size {
+        #[cfg(windows)]
+        let mut metadata = Some({
+            use std::os::windows::fs::MetadataExt;
+
+            let atime = DateTime::from_timestamp_nanos(100 * metadata.last_access_time());
+            let ctime = DateTime::from_timestamp_nanos(100 * metadata.creation_time());
+            let mtime = DateTime::from_timestamp_nanos(100 * metadata.last_write_time());
+            let mode = 0o777;
+            let size = metadata.file_size();
+
+            FileMetadataRecord {
+                atime,
+                ctime,
+                mtime,
+                mode,
+                size,
+            }
+        });
+
+        let size = metadata.as_ref().map(|m| m.size).unwrap();
+        let chunk_ids = match catalog.max_chunk_size {
             0 => 0..=0,
-            size => 0..=((size - 1) / catalog.max_chunk_size),
+            max_chunk_size => match size {
+                0 => 0..=0,
+                size => 0..=((size - 1) / max_chunk_size),
+            },
         };
 
         let mut files = Vec::with_capacity(*chunk_ids.end() as _);
         for chunk_id in chunk_ids {
             let chunk_offset = chunk_id * catalog.max_chunk_size;
-            let chunk_size = size.min((chunk_id + 1) * catalog.max_chunk_size) - chunk_offset;
+            let chunk_size = match catalog.max_chunk_size {
+                0 => size,
+                max_chunk_size => size.min((chunk_id + 1) * max_chunk_size) - chunk_offset,
+            };
             let mut data = vec![0; chunk_size as _];
             let maybe_file = match file.read_exact(&mut data).await {
                 Ok(_) => Ok(Self {
@@ -750,14 +773,11 @@ impl FileRecord {
         let root = fs::canonicalize(root).await?;
         let pattern = format!("{}/**/*", root.to_string_lossy());
         let list = glob(&pattern).with_context(|| format!("Failed to list files on {root:?}"))?;
-        Ok(list
-            .into_iter()
-            .filter_map(|path| path.ok())
-            .map(|path| {
+        Ok(stream::iter(list.filter_map(|path| path.ok()))
+            .then(move |path| {
                 let root = root.clone();
                 async move { Self::load(catalog, root, &path).await }
             })
-            .collect::<stream::FuturesOrdered<_>>()
             .flatten())
     }
 
@@ -792,9 +812,14 @@ impl FileRecord {
             )?;
 
             let metadata = file.metadata().await?;
-            let mut perm = metadata.permissions();
-            perm.set_mode(record.mode);
-            file.set_permissions(perm).await?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+
+                let mut perm = metadata.permissions();
+                perm.set_mode(record.mode);
+                file.set_permissions(perm).await?;
+            }
             file.set_len(record.size).await?;
         }
         Ok(())
