@@ -38,10 +38,12 @@ rustls-tls = [
 [dependencies]
 cdl-catalog = { path = "../cdl-catalog" }
 cdl-fs = { path = "../cdl-fs" }
-cdl-fuse = { path = "../cdl-fuse" }
 
 anyhow = { workspace = true }
 ark-core = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+cdl-fuse = { path = "../cdl-fuse" }
