@@ -716,9 +716,9 @@ impl FileRecord {
         let mut metadata = Some({
             use std::os::windows::fs::MetadataExt;
 
-            let atime = DateTime::from_timestamp_nanos(100 * metadata.last_access_time());
-            let ctime = DateTime::from_timestamp_nanos(100 * metadata.creation_time());
-            let mtime = DateTime::from_timestamp_nanos(100 * metadata.last_write_time());
+            let atime = DateTime::from_timestamp_nanos(100 * metadata.last_access_time() as i64);
+            let ctime = DateTime::from_timestamp_nanos(100 * metadata.creation_time() as i64);
+            let mtime = DateTime::from_timestamp_nanos(100 * metadata.last_write_time() as i64);
             let mode = 0o777;
             let size = metadata.file_size();
 
