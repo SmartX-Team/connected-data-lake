@@ -16,7 +16,7 @@ readme = "./README.md"
 rust-version = "1.82"
 homepage = "https://github.com/ulagbulag/connected-data-lake"
 repository = "https://github.com/ulagbulag/connected-data-lake"
-version = "0.1.1"
+version = "0.1.2"
 
 [workspace.lints.clippy]
 blocks_in_conditions = "allow" # opentelemetry tracing macro would be noisy
