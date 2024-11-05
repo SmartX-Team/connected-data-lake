@@ -1,5 +1,6 @@
 mod functions;
 
+use core::fmt;
 use std::{
     io::SeekFrom,
     path::{Path, PathBuf},
@@ -38,6 +39,7 @@ use glob::glob;
 use itertools::Itertools;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use strum::Display;
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
@@ -53,6 +55,11 @@ pub struct CdlFS {
 }
 
 impl CdlFS {
+    #[inline]
+    pub fn path(&self) -> String {
+        self.path.to_string()
+    }
+
     #[instrument(skip_all, err(level = Level::ERROR))]
     pub async fn copy_to(&self, dst: &GlobalPath) -> Result<()> {
         let stream = self.load_all().await?;
@@ -79,41 +86,16 @@ impl CdlFS {
     }
 
     #[instrument(skip_all, err(level = Level::ERROR))]
-    pub async fn read_files(
+    pub async fn read_files_by_condition(
         &self,
-        files: &RecordBatch,
-    ) -> Result<impl '_ + Send + Stream<Item = Result<FileRecord>>> {
-        let records = FileRecordBatch::try_from(files)?.to_vec()?;
-        let condition_name = records
-            .iter()
-            .map(|FileRecord { name, parent, .. }| {
-                format!("name = '{name}' AND parent = '{parent}'")
-            })
-            .join(" OR ");
-        // let condition =
-        //     format!("WHERE {condition_name} ORDER BY parent ASC, name ASC, chunk_id ASC");
-        // let condition = format!("ORDER BY parent ASC, name ASC, chunk_id ASC");
-        // let condition = "";
-        let condition = format!("WHERE {condition_name} ORDER BY RANDOM()");
-
-        info!("{}", 1);
-        let stream = self.load_by(&condition).await?;
-        info!("{}", 2);
-        // let files: Vec<_> = stream
-        //     .map_ok(|d| {
-        //         info!("{}", 2.1);
-        //         d
-        //     })
-        //     .try_collect()
-        //     .await?;
-        // info!("{}", 3);
-        // info!("{}", files[0].num_rows());
-        let mut stream = stream;
-        while let Some(d) = stream.try_next().await? {
-            info!("{}", 2.1);
-        }
-        todo!();
-        Ok(stream::empty())
+        condition: &str,
+    ) -> Result<impl '_ + Send + Stream<Item = Result<Vec<FileRecord>>>> {
+        let stream = self.load_by(condition).await?;
+        let file_stream = stream.map_err(Error::from).and_then(|batch| async move {
+            let batch = FileRecordBatch::try_from(&batch)?;
+            batch.into_vec()
+        });
+        Ok(file_stream)
     }
 }
 
@@ -152,7 +134,7 @@ impl CdlFS {
             Scheme::Local => Ok(Box::pin(
                 FileRecord::<Vec<u8>>::load_all(catalog, root).await?,
             )),
-            Scheme::S3A => {
+            Scheme::S3 => {
                 let (_, stream) = open_table(catalog, dataset).await?;
                 // TODO: filter root path
                 let stream = stream
@@ -160,7 +142,7 @@ impl CdlFS {
                         batch
                             .map_err(Into::into)
                             .and_then(|ref batch| FileRecordBatch::try_from(batch))
-                            .and_then(FileRecordBatch::to_vec)
+                            .and_then(FileRecordBatch::into_vec)
                             .map(|records| stream::iter(records.into_iter().map(Ok)))
                     })
                     .try_flatten();
@@ -171,23 +153,7 @@ impl CdlFS {
 
     #[inline]
     async fn load_by(&self, condition: &str) -> Result<SendableRecordBatchStream> {
-        // let sql = format!("SELECT parent, name, COUNT(data) AS combined_data FROM {DIR_ROOTFS} GROUP BY parent, name ORDER BY RANDOM()");
-        let sql = format!("SELECT parent, name, COUNT(data) AS combined_data FROM {DIR_ROOTFS} GROUP BY parent, name");
-        info!("Querying LOAD: {sql}");
-
-        let df = self.query(&sql).await?;
-        let mut stream = df
-            .execute_stream()
-            .await
-            .context("Failed to execute the dataframe")?;
-        while let Some(d) = stream.try_next().await? {
-            info!("Incoming: {}", d.num_rows());
-        }
-        info!("Completed");
-
-        todo!();
-
-        let sql = format!("SELECT * FROM {DIR_ROOTFS} {condition}");
+        let sql = format!("SELECT * FROM {DIR_ROOTFS} WHERE {condition}");
         info!("Querying LOAD: {sql}");
 
         let df = self.query(&sql).await?;
@@ -205,7 +171,7 @@ impl CdlFS {
 
         match dataset.scheme {
             Scheme::Local => bail!("Local filesystem does not support CDL rootfs table"),
-            Scheme::S3A => open_table(catalog, dataset).await.map(|(table, _)| table),
+            Scheme::S3 => open_table(catalog, dataset).await.map(|(table, _)| table),
         }
     }
 }
@@ -236,11 +202,7 @@ impl FromStr for GlobalPath {
             bail!("Empty dataset name: {s}")
         }
 
-        let rel = slice
-            .next()
-            .map(|path| path.trim().parse())
-            .transpose()?
-            .unwrap_or_default();
+        let rel = slice.join("/").trim().parse()?;
 
         Ok(Self {
             dataset: DatasetPath {
@@ -249,6 +211,17 @@ impl FromStr for GlobalPath {
             },
             rel,
         })
+    }
+}
+
+impl fmt::Display for GlobalPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { dataset, rel } = self;
+        let rel = rel.display();
+        match dataset.scheme {
+            Scheme::Local => rel.fmt(f),
+            _ => write!(f, "{dataset}/{rel}"),
+        }
     }
 }
 
@@ -271,7 +244,7 @@ impl GlobalPath {
             options.execution.target_partitions = 1;
         }
         let ctx: SessionContext = SessionContext::new_with_config(config);
-        ctx.register_udf(crate::functions::len::Udf::new());
+        ctx.register_udf(crate::functions::len::Udf::build());
 
         Ok(CdlFS {
             catalog,
@@ -287,115 +260,121 @@ impl GlobalPath {
     ) -> Result<()> {
         match self.dataset.scheme {
             Scheme::Local => FileRecord::dump_all(&self.rel, stream).await,
-            Scheme::S3A => {
-                let table = create_table(catalog, &self.dataset).await?;
-                let schema: SchemaRef = Arc::new(table.get_schema()?.try_into()?);
+            Scheme::S3 => self.dump_all_to_s3(catalog, stream).await,
+        }
+    }
 
-                let writer_properties = WriterProperties::builder()
-                    .set_compression(catalog.compression()?)
-                    .set_statistics_enabled(catalog.enabled_statistics())
-                    .build();
+    async fn dump_all_to_s3(
+        &self,
+        catalog: &DatasetCatalog,
+        stream: impl Stream<Item = Result<FileRecord>>,
+    ) -> Result<()> {
+        let table = create_table(catalog, &self.dataset).await?;
+        let schema: SchemaRef = Arc::new(table.get_schema()?.try_into()?);
 
-                let writer = RecordBatchWriter::for_table(&table)
-                    .expect("Failed to make RecordBatchWriter")
-                    .with_writer_properties(writer_properties);
+        let writer_properties = WriterProperties::builder()
+            .set_compression(catalog.compression()?)
+            .set_statistics_enabled(catalog.enabled_statistics())
+            .build();
 
-                struct Writer {
-                    actions: Vec<Action>,
-                    count: usize,
-                    inner: RecordBatchWriter,
-                }
+        let writer = RecordBatchWriter::for_table(&table)
+            .expect("Failed to make RecordBatchWriter")
+            .with_writer_properties(writer_properties);
 
-                impl Writer {
-                    async fn write(&mut self, batch: RecordBatch) -> Result<()> {
-                        self.count += batch.num_rows();
-                        self.inner.write(batch).await?;
-                        self.actions
-                            .extend(&mut self.inner.flush().await?.into_iter().map(Action::Add));
-                        Ok(())
-                    }
-                }
+        struct Writer {
+            actions: Vec<Action>,
+            count: usize,
+            inner: RecordBatchWriter,
+        }
 
-                let mut builder = FileRecordBuilder::default();
-                let num_running_tasks = Arc::new(AtomicUsize::default());
-                let mut stream = Box::pin(stream);
-                let mut tasks = Vec::default();
-                let writer = Arc::new(sync::Mutex::new(Writer {
-                    actions: Vec::default(),
-                    count: 0,
-                    inner: writer,
-                }));
-
-                let wait_for_commit = || async {
-                    while num_running_tasks.load(Ordering::SeqCst) >= catalog.max_write_threads {
-                        sleep(Duration::from_millis(10)).await;
-                    }
-                    num_running_tasks.fetch_add(1, Ordering::SeqCst);
-                };
-                let mut commit = |batch| {
-                    let num_running_tasks = num_running_tasks.clone();
-                    let writer = writer.clone();
-                    tasks.push(spawn(async move {
-                        let result = writer.lock().await.write(batch).await;
-                        num_running_tasks.fetch_sub(1, Ordering::SeqCst);
-                        result
-                    }));
-                };
-
-                while let Some(file) = stream.try_next().await? {
-                    if let Some(batch) = builder.push(catalog, &schema, file)? {
-                        wait_for_commit().await;
-                        commit(batch);
-                    }
-                }
-                if let Some(batch) = builder.flush(&schema)? {
-                    wait_for_commit().await;
-                    commit(batch);
-                }
-                let () = tasks
-                    .into_iter()
-                    .collect::<stream::FuturesOrdered<_>>()
-                    .map(|result| {
-                        result
-                            .map_err(Error::from)
-                            .and_then(|result| result.map_err(Error::from))
-                    })
-                    .try_collect()
-                    .await?;
-
-                let Writer {
-                    actions,
-                    count,
-                    inner: _,
-                } = sync::Mutex::into_inner(Arc::into_inner(writer).expect("Writer is poisoned"));
-                if !actions.is_empty() {
-                    let snapshot = table.snapshot()?;
-                    let operation = DeltaOperation::Write {
-                        mode: SaveMode::Append,
-                        partition_by: {
-                            let partition_cols = snapshot.metadata().partition_columns.clone();
-                            if !partition_cols.is_empty() {
-                                Some(partition_cols)
-                            } else {
-                                None
-                            }
-                        },
-                        predicate: None,
-                    };
-
-                    let log_store = table.log_store();
-                    let version = CommitBuilder::default()
-                        .with_actions(actions)
-                        .build(Some(snapshot), log_store, operation)
-                        .await?
-                        .version();
-                    info!("{count} files are dumped on version {version}");
-                } else {
-                    info!("No files are dumped");
-                }
+        impl Writer {
+            async fn write(&mut self, batch: RecordBatch) -> Result<()> {
+                self.count += batch.num_rows();
+                self.inner.write(batch).await?;
+                self.actions
+                    .extend(&mut self.inner.flush().await?.into_iter().map(Action::Add));
                 Ok(())
             }
         }
+
+        let mut builder = FileRecordBuilder::default();
+        let num_running_tasks = Arc::new(AtomicUsize::default());
+        let mut stream = Box::pin(stream);
+        let mut tasks = Vec::default();
+        let writer = Arc::new(sync::Mutex::new(Writer {
+            actions: Vec::default(),
+            count: 0,
+            inner: writer,
+        }));
+
+        let wait_for_commit = || async {
+            while num_running_tasks.load(Ordering::SeqCst) >= catalog.max_write_threads {
+                sleep(Duration::from_millis(10)).await;
+            }
+            num_running_tasks.fetch_add(1, Ordering::SeqCst);
+        };
+        let mut commit = |batch| {
+            let num_running_tasks = num_running_tasks.clone();
+            let writer = writer.clone();
+            tasks.push(spawn(async move {
+                let result = writer.lock().await.write(batch).await;
+                num_running_tasks.fetch_sub(1, Ordering::SeqCst);
+                result
+            }));
+        };
+
+        while let Some(file) = stream.try_next().await? {
+            if let Some(batch) = builder.push(catalog, &schema, file)? {
+                wait_for_commit().await;
+                commit(batch);
+            }
+        }
+        if let Some(batch) = builder.flush(&schema)? {
+            wait_for_commit().await;
+            commit(batch);
+        }
+        let () = tasks
+            .into_iter()
+            .collect::<stream::FuturesOrdered<_>>()
+            .map(|result| {
+                result
+                    .map_err(Error::from)
+                    .and_then(|result| result.map_err(Error::from))
+            })
+            .try_collect()
+            .await?;
+
+        let Writer {
+            actions,
+            count,
+            inner: _,
+        } = sync::Mutex::into_inner(Arc::into_inner(writer).expect("Writer is poisoned"));
+        if !actions.is_empty() {
+            let snapshot = table.snapshot()?;
+            let operation = DeltaOperation::Write {
+                mode: SaveMode::Append,
+                partition_by: {
+                    let partition_cols = snapshot.metadata().partition_columns.clone();
+                    if !partition_cols.is_empty() {
+                        Some(partition_cols)
+                    } else {
+                        None
+                    }
+                },
+                predicate: None,
+            };
+
+            let log_store = table.log_store();
+            let version = CommitBuilder::default()
+                .with_actions(actions)
+                .build(Some(snapshot), log_store, operation)
+                .await?
+                .version();
+            info!("{count} files are dumped on version {version}");
+        } else {
+            info!("No files are dumped");
+        }
+        Ok(())
     }
 }
 
@@ -404,6 +383,13 @@ impl GlobalPath {
 pub struct DatasetPath {
     pub scheme: Scheme,
     pub name: String,
+}
+
+impl fmt::Display for DatasetPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { scheme, name } = self;
+        write!(f, "{scheme}://{name}")
+    }
 }
 
 impl DatasetPath {
@@ -418,7 +404,7 @@ impl DatasetPath {
     pub fn to_uri(&self, rel: &str) -> String {
         match self.scheme {
             Scheme::Local => rel.into(),
-            Scheme::S3A => {
+            Scheme::S3 => {
                 let name = &self.name;
                 let rel = trim_rel_path(rel);
                 format!("s3a://{name}/{rel}")
@@ -427,10 +413,13 @@ impl DatasetPath {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[strum(serialize_all = "camelCase")]
 pub enum Scheme {
     Local,
-    S3A,
+    S3,
 }
 
 impl FromStr for Scheme {
@@ -438,7 +427,7 @@ impl FromStr for Scheme {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "s3" | "s3a" => Ok(Self::S3A),
+            "s3" | "s3a" => Ok(Self::S3),
             _ => bail!("Unknown scheme: {s:?}"),
         }
     }
@@ -498,7 +487,7 @@ impl TryFrom<&RecordBatch> for FileRecordBatch {
 }
 
 impl FileRecordBatch {
-    fn to_vec(self) -> Result<Vec<FileRecord>> {
+    fn into_vec(self) -> Result<Vec<FileRecord>> {
         let Self {
             name,
             parent,

@@ -27,14 +27,14 @@ use futures::{
 };
 use glob::{glob, PatternError};
 use tokio::fs;
-use tracing::info;
+use tracing::debug;
 use url::Url;
 
 const NAME: &str = "CachedStorage";
 
 /// Register an [ObjectStoreFactory]
 pub fn register_handlers() {
-    info!("Registering store: S3");
+    debug!("Registering store: S3");
     let object_stores = Arc::new(CachedObjectStoreFactory::default());
     let log_stores = Arc::new(S3LogStoreFactory::default());
     for scheme in ["s3", "s3a"].iter() {
@@ -172,11 +172,11 @@ impl ObjectStore for CachedObjectStoreBackend {
         let clone_options = || GetOptions {
             if_match: options.if_match.clone(),
             if_none_match: options.if_none_match.clone(),
-            if_modified_since: options.if_modified_since.clone(),
-            if_unmodified_since: options.if_unmodified_since.clone(),
+            if_modified_since: options.if_modified_since,
+            if_unmodified_since: options.if_unmodified_since,
             range: options.range.clone(),
             version: options.version.clone(),
-            head: options.head.clone(),
+            head: options.head,
         };
 
         match self.cache.get_opts(location, clone_options()).await {
@@ -188,13 +188,7 @@ impl ObjectStore for CachedObjectStoreBackend {
                     .unwrap_or_default()
                 {
                     match options.range {
-                        Some(GetRange::Bounded(Range { start, end })) => {
-                            if end >= start {
-                                end - start
-                            } else {
-                                0
-                            }
-                        }
+                        Some(GetRange::Bounded(Range { start, end })) => end.saturating_sub(start),
                         Some(_) | None => usize::MAX,
                     }
                 } else {
@@ -221,9 +215,8 @@ impl ObjectStore for CachedObjectStoreBackend {
             Ok(result) => Ok(result),
             Err(ObjectStoreError::NotFound { .. }) => {
                 let requested_size = ranges
-                    .into_iter()
-                    .filter(|Range { start, end }| end >= start)
-                    .map(|Range { start, end }| end - start)
+                    .iter()
+                    .map(|Range { start, end }| end.saturating_sub(*start))
                     .sum::<usize>();
 
                 if self.threshold_object_size <= requested_size {

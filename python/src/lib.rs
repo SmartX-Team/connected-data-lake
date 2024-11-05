@@ -1,6 +1,6 @@
 use std::{future::Future, sync::OnceLock};
 
-use anyhow::{Context, Error, Result};
+use anyhow::{anyhow, Context, Error, Result};
 use cdl_catalog::{Compression, DatasetCatalog, Url};
 use cdl_fs::{register_handlers, GlobalPath};
 use clap::Parser;
@@ -8,7 +8,7 @@ use deltalake::{
     arrow::{array::RecordBatch, compute::concat_batches, pyarrow::PyArrowType},
     datafusion::execution::SendableRecordBatchStream,
 };
-use futures::{TryFutureExt, TryStreamExt};
+use futures::{stream, TryFutureExt, TryStreamExt};
 use pyo3::{pyclass, pymethods, pymodule, types::PyModule, Bound, PyResult};
 use tokio::runtime::Runtime;
 use tracing::debug;
@@ -53,6 +53,11 @@ pub struct CdlFS(::cdl_fs::CdlFS);
 
 #[pymethods]
 impl CdlFS {
+    #[getter]
+    fn path(&self) -> String {
+        self.0.path()
+    }
+
     #[pyo3(signature = (
         dst,
         /,
@@ -88,16 +93,29 @@ impl CdlFS {
     }
 
     #[pyo3(signature = (
-        files,
         /,
+        condition,
     ))]
-    fn read_files(&self, files: PyArrowType<RecordBatch>) -> PyResult<Vec<Vec<u8>>> {
-        wrap_tokio(
-            self.0
-                .read_files(&files.0)
-                .and_then(|stream| stream.map_ok(|record| record.data).try_collect()),
-        )
-        .map_err(Into::into)
+    fn read_files(&self, condition: Option<String>) -> PyResult<Vec<Vec<u8>>> {
+        if let Some(condition) = condition {
+            return wrap_tokio(
+                self.0
+                    .read_files_by_condition(&condition)
+                    .and_then(|stream| {
+                        stream
+                            .map_ok(|record| {
+                                stream::iter(
+                                    record.into_iter().map(|file| file.data).map(Result::Ok),
+                                )
+                            })
+                            .try_flatten()
+                            .try_collect()
+                    }),
+            )
+            .map_err(Into::into);
+        }
+
+        Err(anyhow!("").into())
     }
 
     #[pyo3(signature = (

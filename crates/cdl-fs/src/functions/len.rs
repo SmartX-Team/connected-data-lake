@@ -21,7 +21,7 @@ pub(crate) struct Udf {
 }
 
 impl Udf {
-    pub fn new() -> ScalarUDF {
+    pub fn build() -> ScalarUDF {
         ScalarUDF::new_from_impl(Self::new_inner())
     }
 
@@ -37,7 +37,7 @@ impl Udf {
 
 impl ScalarUDFImpl for Udf {
     fn as_any(&self) -> &dyn Any {
-        &*self
+        self
     }
 
     fn name(&self) -> &str {

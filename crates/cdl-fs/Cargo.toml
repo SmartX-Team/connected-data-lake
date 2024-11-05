@@ -47,5 +47,6 @@ futures = { workspace = true }
 glob = { workspace = true }
 itertools = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
+strum = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }

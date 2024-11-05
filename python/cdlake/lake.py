@@ -11,3 +11,6 @@ class Cdl:
 
     def open(self, url: str) -> CdlFS:
         return CdlFS(self._impl.open(url))
+
+    def __repr__(self) -> str:
+        return 'Connected Data Lake'

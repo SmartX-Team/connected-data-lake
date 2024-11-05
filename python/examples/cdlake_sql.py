@@ -1,15 +1,14 @@
 import argparse
 
 import cdlake
-import polars as pl
 
 
 def main(src: str, sql: str) -> None:
     cdl = cdlake.Cdl()
     fs = cdl.open(src)
 
-    df = fs.sql(sql)
-    print(pl.from_arrow(df))
+    df = fs.sql_as_polars(sql)
+    print(df)
 
 
 if __name__ == '__main__':

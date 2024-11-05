@@ -1,5 +1,15 @@
 import pyarrow as pa
 
+try:
+    import pandas as pd
+except ImportError:
+    pass
+
+try:
+    import polars as pl
+except ImportError:
+    pass
+
 from ._internal import CdlFS as _CdlFSImpl
 
 
@@ -25,6 +35,20 @@ class CdlFS:
     ) -> pa.RecordBatch:
         return self._impl.sql(sql)
 
+    def sql_as_pandas(
+        self,
+        sql: str,
+    ):
+        df: pd.DataFrame = self.sql(sql).to_pandas()
+        return df
+
+    def sql_as_polars(
+        self,
+        sql: str,
+    ):
+        df: pl.DataFrame = pl.from_arrow(self.sql(sql))  # type: ignore
+        return df
+
     def to_torch_dataset(
         self,
         batch_size: int = 1,
@@ -35,3 +59,6 @@ class CdlFS:
             batch_size=batch_size,
             fs=self._impl,
         )
+
+    def __repr__(self) -> str:
+        return f'CdlFS({self._impl.path!r})'

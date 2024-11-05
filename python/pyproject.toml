@@ -18,6 +18,8 @@ classifiers = [
 dependencies = ["pyarrow"]
 
 [project.optional-dependencies]
+pandas = ["pandas"]
+polars = ["polars"]
 
 [project.urls]
 documentation = "https://github.com/ulagbulag/connected-data-lake"
@@ -47,3 +49,11 @@ strict_equality = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 warn_return_any = false
+
+[tool.pytest.ini_options]
+addopts = "-v -m 'not integration and not benchmark'"
+testpaths = ["cdlake", "tests"]
+markers = [
+    "pandas: marks tests that require pandas",
+    "polars: marks tests that require polars",
+]

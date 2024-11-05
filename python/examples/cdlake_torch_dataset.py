@@ -10,9 +10,10 @@ def main(src: str) -> None:
 
     loader = torch.utils.data.DataLoader(
         dataset=fs.to_torch_dataset(),
-        batch_size=4,
+        batch_size=1,
     )
-    print(next(iter(loader)))
+    for index, data in zip(range(4), loader):
+        print(f'{index:06d} => {data.shape}')
 
 
 if __name__ == '__main__':
