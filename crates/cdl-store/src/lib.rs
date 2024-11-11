@@ -27,7 +27,7 @@ use futures::{
 };
 use glob::{glob, PatternError};
 use tokio::fs;
-use tracing::debug;
+use tracing::{debug, info};
 use url::Url;
 
 const NAME: &str = "CachedStorage";
@@ -322,6 +322,7 @@ impl CachedObjectStoreBackend {
         while total_size > self.threshold_total_size {
             let CachedFileMetadata { len, path, .. } = metadata.pop_last().unwrap();
             total_size -= len;
+            info!("Clearing object cache: {}", path.display());
             fs::remove_file(path).await.map_err(convert_std_io_err)?;
         }
         Ok(())
@@ -329,6 +330,7 @@ impl CachedObjectStoreBackend {
 
     async fn store(&self, location: &Path) -> ObjectStoreResult<PutResult> {
         self.shrink().await?;
+        info!("Caching object: {location}");
 
         let payload = self.backend.get(location).await?.bytes().await?;
         self.cache.put(location, payload.into()).await
