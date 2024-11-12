@@ -33,7 +33,7 @@ openssl-tls = ["cdl-catalog/openssl-tls", "cdl-fs/openssl-tls"]
 rustls-tls = ["cdl-catalog/rustls-tls", "cdl-fs/rustls-tls"]
 
 [dependencies]
-cdl-catalog = { path = "../crates/cdl-catalog", features = ["pyo3"] }
+cdl-catalog = { path = "../crates/cdl-catalog", features = ["serde"] }
 cdl-fs = { path = "../crates/cdl-fs" }
 
 anyhow = { workspace = true }

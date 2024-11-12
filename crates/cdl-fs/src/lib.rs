@@ -178,6 +178,7 @@ impl CdlFS {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub struct GlobalPath {
     pub dataset: DatasetPath,
     pub rel: PathBuf,
@@ -380,6 +381,7 @@ impl GlobalPath {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub struct DatasetPath {
     pub scheme: Scheme,
     pub name: String,
@@ -415,8 +417,8 @@ impl DatasetPath {
 
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
-#[strum(serialize_all = "camelCase")]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+#[strum(serialize_all = "kebab-case")]
 pub enum Scheme {
     Local,
     S3,
@@ -637,6 +639,7 @@ impl FileRecordBuilder {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub struct FileRecord<T = Vec<u8>> {
     pub name: String,
     pub parent: String,
@@ -888,6 +891,7 @@ impl FileRecord {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub struct FileMetadataRecord {
     pub atime: DateTime<Utc>,
     pub ctime: DateTime<Utc>,

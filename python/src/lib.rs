@@ -1,7 +1,7 @@
 use std::{future::Future, sync::OnceLock};
 
 use anyhow::{anyhow, Context, Error, Result};
-use cdl_catalog::{Compression, DatasetCatalog, Url};
+use cdl_catalog::DatasetCatalog;
 use cdl_fs::{register_handlers, GlobalPath};
 use clap::Parser;
 use deltalake::{
@@ -9,7 +9,11 @@ use deltalake::{
     datafusion::execution::SendableRecordBatchStream,
 };
 use futures::{stream, TryFutureExt, TryStreamExt};
-use pyo3::{pyclass, pymethods, pymodule, types::PyModule, Bound, PyResult};
+use pyo3::{
+    pyclass, pymethods, pymodule,
+    types::{PyAnyMethods, PyDict, PyDictMethods, PyModule, PyStringMethods},
+    Bound, PyResult,
+};
 use tokio::runtime::Runtime;
 use tracing::debug;
 
@@ -22,13 +26,17 @@ pub struct Cdl {
 impl Cdl {
     #[new]
     #[pyo3(signature = (
+        catalog,
         /,
-        catalog = None,
     ))]
-    fn new(catalog: Option<DatasetCatalog>) -> PyResult<Self> {
-        let catalog = match catalog {
-            Some(catalog) => catalog,
-            None => DatasetCatalog::try_parse_from::<[_; 0], &str>([]).map_err(Error::from)?,
+    fn new<'py>(catalog: Bound<'py, PyDict>) -> PyResult<Self> {
+        let catalog = {
+            let mut merged =
+                DatasetCatalog::try_parse_from::<[_; 0], &str>([]).map_err(Error::from)?;
+            for (key, value) in catalog.iter() {
+                merged.merge(key.str()?.to_str()?, value.str()?.to_str()?)?;
+            }
+            merged
         };
         register_handlers();
 
@@ -173,9 +181,6 @@ fn _internal(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Classes
     m.add_class::<Cdl>()?;
     m.add_class::<CdlFS>()?;
-    m.add_class::<Compression>()?;
-    m.add_class::<DatasetCatalog>()?;
-    m.add_class::<Url>()?;
 
     // Functions
 

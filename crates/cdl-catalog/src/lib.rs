@@ -1,22 +1,18 @@
 use std::{collections::HashMap, fmt, ops, str::FromStr};
 
-#[cfg(feature = "pyo3")]
-use anyhow::Error;
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, ValueEnum};
 use deltalake::{
     parquet::{basic, file::properties::EnabledStatistics},
     DeltaResult,
 };
-#[cfg(feature = "pyo3")]
-use pyo3::{pyclass, pymethods, PyResult};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 
 #[derive(Clone, Debug, PartialEq, Parser)]
-#[cfg_attr(feature = "pyo3", pyclass)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub struct DatasetCatalog {
     /// Max directory size for cache directory.
     /// The value 0 disables the caching.
@@ -24,6 +20,10 @@ pub struct DatasetCatalog {
         global=true, long,
         env = "CDL_CACHE_DIR",
         default_value_t = Self::default_cache_dir(),
+    )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "DatasetCatalog::default_cache_dir")
     )]
     pub cache_dir: String,
 
@@ -33,10 +33,12 @@ pub struct DatasetCatalog {
         env = "CDL_COMPRESSION",
         default_value_t = Compression::default(),
     )]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub compression: Compression,
 
     /// A compression level applied when storing data in backend storage.
     #[arg(long, env = "CDL_COMPRESSION_LEVEL")]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub compression_level: Option<u8>,
 
     /// Max file size for each parquet file.
@@ -48,6 +50,10 @@ pub struct DatasetCatalog {
         env = "CDL_MAX_BUFFER_SIZE",
         default_value_t = Self::default_max_buffer_size(),
     )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "DatasetCatalog::default_max_buffer_size")
+    )]
     pub max_buffer_size: u64,
 
     /// Max directory size for cache directory.
@@ -56,6 +62,10 @@ pub struct DatasetCatalog {
         global=true, long,
         env = "CDL_MAX_CACHE_SIZE",
         default_value_t = Self::default_max_cache_size(),
+    )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "DatasetCatalog::default_max_cache_size")
     )]
     pub max_cache_size: u64,
 
@@ -68,6 +78,10 @@ pub struct DatasetCatalog {
         env = "CDL_MAX_CHUNK_SIZE",
         default_value_t = Self::default_max_chunk_size(),
     )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "DatasetCatalog::default_max_chunk_size")
+    )]
     pub max_chunk_size: u64,
 
     /// Maximum number of threads for writing files.
@@ -75,6 +89,10 @@ pub struct DatasetCatalog {
         global=true, long,
         env = "CDL_MAX_WRITE_THREADS",
         default_value_t = Self::default_max_write_threads(),
+    )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "DatasetCatalog::default_max_write_threads")
     )]
     pub max_write_threads: usize,
 
@@ -84,17 +102,26 @@ pub struct DatasetCatalog {
         env = "CDL_MIN_CACHE_OBJECT_SIZE",
         default_value_t = Self::default_min_cache_object_size(),
     )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "DatasetCatalog::default_min_cache_object_size")
+    )]
     pub min_cache_object_size: usize,
 
     /// S3 access key.
     #[arg(global = true, long, env = "AWS_ACCESS_KEY_ID")]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub s3_access_key: Option<String>,
 
     /// S3 region name.
     #[arg(
         global=true, long,
         env = "AWS_ENDPOINT_URL",
-        default_value = Self::default_s3_endpoint(),
+        default_value_t = Self::default_s3_endpoint(),
+    )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "DatasetCatalog::default_s3_endpoint")
     )]
     pub s3_endpoint: Url,
 
@@ -102,12 +129,17 @@ pub struct DatasetCatalog {
     #[arg(
         global=true, long,
         env = "AWS_REGION",
-        default_value = Self::default_s3_region(),
+        default_value_t = Self::default_s3_region(),
+    )]
+    #[cfg_attr(
+        feature = "serde",
+        serde(default = "DatasetCatalog::default_s3_region")
     )]
     pub s3_region: String,
 
     /// S3 secret key.
     #[arg(global = true, long, env = "AWS_SECRET_ACCESS_KEY")]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub s3_secret_key: Option<String>,
 }
 
@@ -123,10 +155,8 @@ impl Default for DatasetCatalog {
             max_write_threads: Self::default_max_write_threads(),
             min_cache_object_size: Self::default_min_cache_object_size(),
             s3_access_key: None,
-            s3_endpoint: Self::default_s3_endpoint()
-                .parse()
-                .expect("Invalid fallback s3 endpoint"),
-            s3_region: Self::default_s3_region().into(),
+            s3_endpoint: Self::default_s3_endpoint(),
+            s3_region: Self::default_s3_region(),
             s3_secret_key: None,
         }
     }
@@ -166,14 +196,40 @@ impl DatasetCatalog {
         64 * 1024 * 1024 // 64 MiB
     }
 
-    #[inline]
-    pub const fn default_s3_endpoint() -> &'static str {
+    pub fn default_s3_endpoint() -> Url {
         "http://object-storage"
+            .parse()
+            .expect("Invalid fallback s3 endpoint")
     }
 
-    #[inline]
-    pub const fn default_s3_region() -> &'static str {
-        "auto"
+    pub fn default_s3_region() -> String {
+        "auto".into()
+    }
+
+    pub fn merge(&mut self, key: &str, value: &str) -> Result<()> {
+        match key {
+            "cache_dir" => self.cache_dir = value.into(),
+            "compression" => self.compression = value.parse()?,
+            "compression_level" => self.compression_level = Some(value.parse()?),
+            "max_buffer_size" => self.max_buffer_size = value.parse()?,
+            "max_cache_size" => self.max_cache_size = value.parse()?,
+            "max_chunk_size" => self.max_chunk_size = value.parse()?,
+            "max_write_threads" => self.max_write_threads = value.parse()?,
+            "min_cache_object_size" => self.min_cache_object_size = value.parse()?,
+            "s3_access_key" => self.s3_access_key = Some(value.into()),
+            "s3_endpoint" => self.s3_endpoint = value.parse()?,
+            "s3_region" => self.s3_region = value.into(),
+            "s3_secret_key" => self.s3_secret_key = Some(value.into()),
+            _ => bail!("Invalid key: {key:?}"),
+        }
+        Ok(())
+    }
+
+    pub fn merge_iter<'a>(
+        &mut self,
+        mut iter: impl Iterator<Item = (&'a str, &'a str)>,
+    ) -> Result<()> {
+        iter.try_for_each(|(key, value)| self.merge(key, value))
     }
 }
 
@@ -252,7 +308,6 @@ impl DatasetCatalog {
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Display, Default, PartialEq, Eq, Hash, EnumString, ValueEnum)]
-#[cfg_attr(feature = "pyo3", pyclass)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 #[strum(serialize_all = "kebab-case")]
@@ -270,7 +325,6 @@ pub enum Compression {
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "pyo3", pyclass)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 #[repr(transparent)]
@@ -304,18 +358,5 @@ impl ops::DerefMut for Url {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-#[cfg(feature = "pyo3")]
-#[pymethods]
-impl Url {
-    #[new]
-    #[pyo3(signature = (
-        url,
-        /,
-    ))]
-    fn new(url: &str) -> PyResult<Self> {
-        url.parse().map_err(|error| Error::from(error).into())
     }
 }
