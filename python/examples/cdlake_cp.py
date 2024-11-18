@@ -4,7 +4,9 @@ import cdlake
 
 
 def main(src: str, dst: str) -> None:
-    cdl = cdlake.Cdl()
+    cdl = cdlake.Cdl(
+        max_cache_size=0,
+    )
     fs = cdl.open(src)
     fs.copy_to(dst)
 

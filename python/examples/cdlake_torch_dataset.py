@@ -5,7 +5,9 @@ import torch
 
 
 def main(src: str) -> None:
-    cdl = cdlake.Cdl()
+    cdl = cdlake.Cdl(
+        max_cache_size=0,
+    )
     fs = cdl.open(src)
 
     loader = torch.utils.data.DataLoader(

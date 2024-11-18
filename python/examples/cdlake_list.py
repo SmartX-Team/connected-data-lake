@@ -5,7 +5,9 @@ import polars as pl
 
 
 def main(src: str, path: str | None) -> None:
-    cdl = cdlake.Cdl()
+    cdl = cdlake.Cdl(
+        max_cache_size=0,
+    )
     fs = cdl.open(src)
 
     match path:

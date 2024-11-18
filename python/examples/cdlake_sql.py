@@ -4,7 +4,9 @@ import cdlake
 
 
 def main(src: str, sql: str) -> None:
-    cdl = cdlake.Cdl()
+    cdl = cdlake.Cdl(
+        max_cache_size=0,
+    )
     fs = cdl.open(src)
 
     df = fs.sql_as_polars(sql)
