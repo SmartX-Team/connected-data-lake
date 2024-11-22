@@ -1,13 +1,11 @@
 use std::{future::Future, sync::OnceLock};
 
 use anyhow::{anyhow, Context, Error, Result};
+use arrow::{array::RecordBatch, compute::concat_batches, pyarrow::PyArrowType};
 use cdl_catalog::DatasetCatalog;
-use cdl_fs::{register_handlers, GlobalPath};
+use cdl_fs::GlobalPath;
 use clap::Parser;
-use deltalake::{
-    arrow::{array::RecordBatch, compute::concat_batches, pyarrow::PyArrowType},
-    datafusion::execution::SendableRecordBatchStream,
-};
+use datafusion::execution::SendableRecordBatchStream;
 use futures::{stream, TryFutureExt, TryStreamExt};
 use pyo3::{
     pyclass, pymethods, pymodule,
@@ -38,7 +36,6 @@ impl Cdl {
             }
             merged
         };
-        register_handlers();
 
         Ok(Self { catalog })
     }

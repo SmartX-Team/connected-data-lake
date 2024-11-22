@@ -1,21 +1,38 @@
-use std::{collections::HashMap, fmt, ops, str::FromStr};
+use std::{collections::HashMap, fmt, ops, str::FromStr, sync::Arc};
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, ValueEnum};
-use deltalake::{
-    parquet::{basic, file::properties::EnabledStatistics},
-    DeltaResult,
+use clap::Parser;
+use lance::{
+    dataset::progress::{NoopFragmentWriteProgress, WriteFragmentProgress},
+    io::ObjectStoreParams,
+};
+use lance_table::io::commit::{CommitHandler, UnsafeCommitHandler};
+use object_store::{
+    aws::{AwsCredential, AwsCredentialProvider},
+    StaticCredentialProvider,
 };
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use strum::{Display, EnumString};
+
+macro_rules! get_arg {
+    ( $catalog:tt, $name:ident ) => {{
+        get_arg($catalog.$name.as_ref(), stringify!($name))
+    }};
+}
+
+fn get_arg<T>(arg: Option<&T>, name: &'static str) -> Result<T>
+where
+    T: Clone,
+{
+    arg.cloned()
+        .with_context(|| format!("Missing catalog config: {name}"))
+}
 
 #[derive(Clone, Debug, PartialEq, Parser)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub struct DatasetCatalog {
     /// Max directory size for cache directory.
-    /// The value 0 disables the caching.
     #[arg(
         global=true, long,
         env = "CDL_CACHE_DIR",
@@ -27,21 +44,7 @@ pub struct DatasetCatalog {
     )]
     pub cache_dir: String,
 
-    /// A compression method applied when storing data in backend storage.
-    #[arg(
-        global=true, long,
-        env = "CDL_COMPRESSION",
-        default_value_t = Compression::default(),
-    )]
-    #[cfg_attr(feature = "serde", serde(default))]
-    pub compression: Compression,
-
-    /// A compression level applied when storing data in backend storage.
-    #[arg(long, env = "CDL_COMPRESSION_LEVEL")]
-    #[cfg_attr(feature = "serde", serde(default))]
-    pub compression_level: Option<u8>,
-
-    /// Max file size for each parquet file.
+    /// Max file size for each batch file.
     /// The larger the value, the faster the data transfer speed.
     /// It is recommended to use the largest possible value
     /// that is supported simultaneously by multiple backend storages.
@@ -54,7 +57,7 @@ pub struct DatasetCatalog {
         feature = "serde",
         serde(default = "DatasetCatalog::default_max_buffer_size")
     )]
-    pub max_buffer_size: u64,
+    pub max_buffer_size: usize,
 
     /// Max directory size for cache directory.
     /// The value 0 disables the caching.
@@ -147,8 +150,6 @@ impl Default for DatasetCatalog {
     fn default() -> Self {
         Self {
             cache_dir: Self::default_cache_dir(),
-            compression: Compression::default(),
-            compression_level: None,
             max_buffer_size: Self::default_max_buffer_size(),
             max_cache_size: Self::default_max_cache_size(),
             max_chunk_size: Self::default_max_chunk_size(),
@@ -169,7 +170,7 @@ impl DatasetCatalog {
 
     #[allow(clippy::identity_op)]
     #[inline]
-    pub const fn default_max_buffer_size() -> u64 {
+    pub const fn default_max_buffer_size() -> usize {
         1 * 1024 * 1024 * 1024 // 1 GiB
     }
 
@@ -182,7 +183,8 @@ impl DatasetCatalog {
     #[allow(clippy::identity_op)]
     #[inline]
     pub const fn default_max_chunk_size() -> u64 {
-        256 * 1024 // 256 KiB
+        // 256 * 1024 // 256 KiB
+        0
     }
 
     #[inline]
@@ -209,8 +211,6 @@ impl DatasetCatalog {
     pub fn merge(&mut self, key: &str, value: &str) -> Result<()> {
         match key {
             "cache_dir" => self.cache_dir = value.into(),
-            "compression" => self.compression = value.parse()?,
-            "compression_level" => self.compression_level = Some(value.parse()?),
             "max_buffer_size" => self.max_buffer_size = value.parse()?,
             "max_cache_size" => self.max_cache_size = value.parse()?,
             "max_chunk_size" => self.max_chunk_size = value.parse()?,
@@ -238,21 +238,27 @@ impl DatasetCatalog {
     pub const KEY_MAX_CACHE_SIZE: &'static str = "CDL_MAX_CACHE_SIZE";
     pub const KEY_MIN_CACHE_OBJECT_SIZE: &'static str = "CDL_MIN_CACHE_OBJECT_SIZE";
 
-    pub fn storage_options(&self) -> Result<HashMap<String, String>> {
+    pub fn commit_handler(&self) -> Arc<dyn CommitHandler> {
+        Arc::new(UnsafeCommitHandler)
+    }
+
+    pub fn fragment_process(&self) -> Arc<dyn WriteFragmentProgress> {
+        Arc::new(NoopFragmentWriteProgress::default())
+    }
+
+    pub fn s3_credential_provider(&self) -> Result<AwsCredentialProvider> {
+        Ok(Arc::new(StaticCredentialProvider::new(AwsCredential {
+            key_id: get_arg!(self, s3_access_key)?,
+            secret_key: get_arg!(self, s3_secret_key)?,
+            token: None,
+        })))
+    }
+
+    pub fn storage_options(&self, append_credentials: bool) -> Result<HashMap<String, String>> {
         let allow_http = self.s3_endpoint.scheme() == "http";
-
-        fn get_arg<T>(arg: Option<&T>, name: &'static str) -> Result<T>
-        where
-            T: Clone,
-        {
-            arg.cloned()
-                .with_context(|| format!("Missing catalog config: {name}"))
-        }
-
-        macro_rules! get_arg {
-            ( $name:ident ) => {{
-                get_arg(self.$name.as_ref(), stringify!($name))
-            }};
+        let mut endpoint = self.s3_endpoint.to_string();
+        while endpoint.ends_with("/") {
+            endpoint = endpoint[..endpoint.len() - 1].to_string();
         }
 
         let mut options = HashMap::default();
@@ -268,59 +274,38 @@ impl DatasetCatalog {
         );
         // S3
         options.insert("allow_http".into(), allow_http.to_string());
-        options.insert("AWS_ACCESS_KEY_ID".into(), get_arg!(s3_access_key)?);
+        if append_credentials {
+            options.insert("AWS_ACCESS_KEY_ID".into(), get_arg!(self, s3_access_key)?);
+        }
         options.insert("AWS_ALLOW_HTTP".into(), allow_http.to_string());
         options.insert("AWS_EC2_METADATA_DISABLED".into(), true.to_string());
-        options.insert("AWS_ENDPOINT_URL".into(), self.s3_endpoint.to_string());
+        options.insert("AWS_ENDPOINT_URL".into(), endpoint);
         options.insert("AWS_REGION".into(), self.s3_region.clone());
-        options.insert("AWS_SECRET_ACCESS_KEY".into(), get_arg!(s3_secret_key)?);
+        if append_credentials {
+            options.insert(
+                "AWS_SECRET_ACCESS_KEY".into(),
+                get_arg!(self, s3_secret_key)?,
+            );
+        }
+        options.insert("AWS_VIRTUAL_HOSTED_STYLE_REQUEST".into(), "false".into());
         options.insert("conditional_put".into(), "etag".into());
         Ok(options)
     }
 
-    pub fn compression(&self) -> DeltaResult<basic::Compression> {
-        Ok(match self.compression {
-            Compression::BROTLI => basic::Compression::BROTLI(match self.compression_level {
-                Some(level) => basic::BrotliLevel::try_new(level as _)?,
-                None => basic::BrotliLevel::default(),
-            }),
-            Compression::GZIP => basic::Compression::GZIP(match self.compression_level {
-                Some(level) => basic::GzipLevel::try_new(level as _)?,
-                None => basic::GzipLevel::default(),
-            }),
-            Compression::LZO => basic::Compression::LZO,
-            Compression::LZ4 => basic::Compression::LZ4,
-            Compression::LZ4_RAW => basic::Compression::LZ4_RAW,
-            Compression::SNAPPY => basic::Compression::SNAPPY,
-            Compression::UNCOMPRESSED => basic::Compression::UNCOMPRESSED,
-            Compression::ZSTD => basic::Compression::ZSTD(match self.compression_level {
-                Some(level) => basic::ZstdLevel::try_new(level as _)?,
-                None => basic::ZstdLevel::default(),
-            }),
+    pub fn storage_parameters(&self) -> Result<ObjectStoreParams> {
+        Ok(ObjectStoreParams {
+            aws_credentials: Some(self.s3_credential_provider()?),
+            list_is_lexically_ordered: Some(true),
+            storage_options: Some(self.storage_options(false)?),
+            use_constant_size_upload_parts: false,
+            ..Default::default()
         })
     }
 
     #[inline]
-    pub const fn enabled_statistics(&self) -> EnabledStatistics {
-        EnabledStatistics::None
+    pub const fn enable_statistics(&self) -> bool {
+        false
     }
-}
-
-#[allow(non_camel_case_types)]
-#[derive(Copy, Clone, Debug, Display, Default, PartialEq, Eq, Hash, EnumString, ValueEnum)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
-#[strum(serialize_all = "kebab-case")]
-pub enum Compression {
-    BROTLI = 0,
-    GZIP = 1,
-    LZO = 2,
-    LZ4 = 3,
-    LZ4_RAW = 4,
-    #[default]
-    SNAPPY = 5,
-    UNCOMPRESSED = 6,
-    ZSTD = 7,
 }
 
 #[allow(non_camel_case_types)]

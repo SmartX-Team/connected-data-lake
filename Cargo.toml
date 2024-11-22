@@ -25,24 +25,59 @@ blocks_in_conditions = "allow" # opentelemetry tracing macro would be noisy
 ark-core = { git = "https://github.com/ulagbulag/OpenARK" }
 
 anyhow = { version = "1.0", features = ["backtrace"] }
+arrow = { version = "52", default-features = false, features = [ # depends: lance
+    "csv",
+    "ipc",
+    "json",
+
+] }
 async-trait = { version = "0.1" }
 bytes = { version = "1.8" }
 chrono = { version = "0.4" }
 clap = { version = "4.5", features = ["derive", "env", "string", "unicode"] }
-deltalake = { version = "0.21" }
+datafusion = { version = "41.0", default-features = false, features = [ # depends: lance
+    "array_expressions",
+    "crypto_expressions",
+    "datetime_expressions",
+    "encoding_expressions",
+    "math_expressions",
+    "nested_expressions",
+    "regex_expressions",
+    "string_expressions",
+    "unicode_expressions",
+] }
 filetime = { version = "0.2" }
 fuser = { version = "0.15" }
 futures = { version = "0.3" }
 glob = { version = "0.3" }
 itertools = { version = "0.13" }
+lance = { version = "0.20", default-features = false }
+lance-core = { version = "0.20", default-features = false } # depends: lance
+lance-encoding = { version = "0.20", default-features = false } # depends: lance
+lance-io = { version = "0.20", default-features = false } # depends: lance
+lance-python = { package = "pylance", version = "0.20", default-features = false } # depends: lance
+lance-table = { version = "0.20", default-features = false } # depends: lance
 libc = { version = "0.2" }
-pyo3 = { version = "0.21", features = [ # depends: deltalake
+object_store = { version = "0.10" } # depends: lance
+pyo3 = { version = "0.21", features = [ # depends: lance
     "anyhow",
     "experimental-inspect",
     "macros",
 ] }
 serde = { version = "1.0" }
-strum = { version = "0.26" }
+strum = { version = "0.26", features = ["derive"] }
 tokio = { version = "1" }
+tokio-stream = { version = "0.1" }
 tracing = { version = "0.1" }
 url = { version = "2.5" }
+
+[patch.crates-io]
+# lance = { git = "https://github.com/lancedb/lance.git" }
+# pylance = { git = "https://github.com/lancedb/lance.git" }
+# TODO: Wait for merge PR: https://github.com/lancedb/lance/pull/3146
+lance = { git = "https://github.com/ulagbulag/lance.git", rev = "24f38842d47333925184f9501cd337fe4e2266b5" }
+lance-core = { git = "https://github.com/ulagbulag/lance.git", rev = "24f38842d47333925184f9501cd337fe4e2266b5" }
+lance-encoding = { git = "https://github.com/ulagbulag/lance.git", rev = "24f38842d47333925184f9501cd337fe4e2266b5" }
+lance-io = { git = "https://github.com/ulagbulag/lance.git", rev = "24f38842d47333925184f9501cd337fe4e2266b5" }
+lance-table = { git = "https://github.com/ulagbulag/lance.git", rev = "24f38842d47333925184f9501cd337fe4e2266b5" }
+pylance = { git = "https://github.com/ulagbulag/lance.git", rev = "24f38842d47333925184f9501cd337fe4e2266b5" }

@@ -19,25 +19,14 @@ workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = []
-
-# TLS
-openssl-tls = [
-    "cdl-catalog/openssl-tls",
-    "cdl-fs/openssl-tls",
-    "deltalake/s3-native-tls",
-]
-rustls-tls = ["cdl-catalog/openssl-tls", "cdl-fs/rustls-tls", "deltalake/s3"]
-
 [dependencies]
 cdl-catalog = { path = "../cdl-catalog" }
 cdl-fs = { path = "../cdl-fs" }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-deltalake = { workspace = true, features = ["datafusion"] }
 fuser = { workspace = true }
+lance = { workspace = true }
 libc = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tracing = { workspace = true }

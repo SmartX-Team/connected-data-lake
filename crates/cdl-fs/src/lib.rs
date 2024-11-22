@@ -6,46 +6,46 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     str::FromStr,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-    time::Duration,
+    sync::Arc,
 };
 
 use anyhow::{anyhow, bail, Context, Error, Result};
+use arrow::{
+    array::{self, ArrayBuilder, ArrayRef, AsArray, RecordBatch},
+    datatypes::{
+        DataType as ArrowDataType, Field as ArrowField, Schema as ArrowSchema, SchemaRef,
+        TimeUnit as ArrowTimeUnit,
+    },
+};
 use cdl_catalog::DatasetCatalog;
-pub use cdl_store::register_handlers;
+use cdl_store::build_registry;
+pub use cdl_store::CachedObjectStoreProvider;
 use chrono::{DateTime, Timelike, Utc};
-use deltalake::{
-    arrow::{
-        array::{self, ArrayBuilder, ArrayRef, AsArray, RecordBatch},
-        datatypes::SchemaRef,
-    },
-    datafusion::{
-        execution::SendableRecordBatchStream,
-        prelude::{DataFrame, SessionConfig, SessionContext},
-    },
-    kernel::{Action, DataType, PrimitiveType, StructField},
-    operations::transaction::CommitBuilder,
-    parquet::file::properties::WriterProperties,
-    protocol::{DeltaOperation, SaveMode},
-    writer::{DeltaWriter, RecordBatchWriter},
-    DeltaOps, DeltaTable,
+use datafusion::{
+    error::DataFusionError,
+    execution::SendableRecordBatchStream,
+    physical_plan::stream::RecordBatchStreamAdapter,
+    prelude::{DataFrame, SessionConfig, SessionContext},
 };
 use filetime::FileTime;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
 use glob::glob;
 use itertools::Itertools;
+use lance::{
+    dataset::{builder::DatasetBuilder, InsertBuilder, WriteDestination, WriteMode, WriteParams},
+    Dataset, Error as LanceError,
+};
+use lance_encoding::version::LanceFileVersion;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use strum::Display;
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
-    spawn, sync,
-    time::sleep,
+    spawn,
+    sync::mpsc,
 };
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, info, instrument, Level};
 
 pub struct CdlFS {
@@ -121,9 +121,7 @@ impl CdlFS {
             .context("Failed to execute the dataframe")
     }
 
-    async fn load_all(
-        &self,
-    ) -> Result<Pin<Box<dyn '_ + Send + Stream<Item = Result<FileRecord>>>>> {
+    async fn load_all(&self) -> Result<FileRecordStream> {
         let Self {
             catalog,
             ctx: _,
@@ -132,12 +130,18 @@ impl CdlFS {
 
         match dataset.scheme {
             Scheme::Local => Ok(Box::pin(
-                FileRecord::<Vec<u8>>::load_all(catalog, root).await?,
+                FileRecord::<Vec<u8>>::load_all(catalog.clone(), root).await?,
             )),
             Scheme::S3 => {
-                let (_, stream) = open_table(catalog, dataset).await?;
-                // TODO: filter root path
-                let stream = stream
+                let dataset = open_table(catalog, dataset).await?;
+                let stream = dataset
+                    .scan()
+                    // TODO: filter root path
+                    // .filter()
+                    .scan_in_order(true)
+                    .use_stats(self.catalog.enable_statistics())
+                    .try_into_stream()
+                    .await?
                     .map(|batch| {
                         batch
                             .map_err(Into::into)
@@ -162,7 +166,7 @@ impl CdlFS {
             .context("Failed to execute the dataframe")
     }
 
-    async fn table(&self) -> Result<DeltaTable> {
+    async fn table(&self) -> Result<Dataset> {
         let Self {
             catalog,
             ctx: _,
@@ -171,7 +175,7 @@ impl CdlFS {
 
         match dataset.scheme {
             Scheme::Local => bail!("Local filesystem does not support CDL rootfs table"),
-            Scheme::S3 => open_table(catalog, dataset).await.map(|(table, _)| table),
+            Scheme::S3 => open_table(catalog, dataset).await,
         }
     }
 }
@@ -254,11 +258,7 @@ impl GlobalPath {
         })
     }
 
-    async fn dump_all(
-        &self,
-        catalog: &DatasetCatalog,
-        stream: impl Stream<Item = Result<FileRecord>>,
-    ) -> Result<()> {
+    async fn dump_all(&self, catalog: &DatasetCatalog, stream: FileRecordStream) -> Result<()> {
         match self.dataset.scheme {
             Scheme::Local => FileRecord::dump_all(&self.rel, stream).await,
             Scheme::S3 => self.dump_all_to_s3(catalog, stream).await,
@@ -268,114 +268,42 @@ impl GlobalPath {
     async fn dump_all_to_s3(
         &self,
         catalog: &DatasetCatalog,
-        stream: impl Stream<Item = Result<FileRecord>>,
+        stream: FileRecordStream,
     ) -> Result<()> {
-        let table = create_table(catalog, &self.dataset).await?;
-        let schema: SchemaRef = Arc::new(table.get_schema()?.try_into()?);
-
-        let writer_properties = WriterProperties::builder()
-            .set_compression(catalog.compression()?)
-            .set_statistics_enabled(catalog.enabled_statistics())
-            .build();
-
-        let writer = RecordBatchWriter::for_table(&table)
-            .expect("Failed to make RecordBatchWriter")
-            .with_writer_properties(writer_properties);
-
-        struct Writer {
-            actions: Vec<Action>,
-            count: usize,
-            inner: RecordBatchWriter,
-        }
-
-        impl Writer {
-            async fn write(&mut self, batch: RecordBatch) -> Result<()> {
-                self.count += batch.num_rows();
-                self.inner.write(batch).await?;
-                self.actions
-                    .extend(&mut self.inner.flush().await?.into_iter().map(Action::Add));
-                Ok(())
-            }
-        }
-
-        let mut builder = FileRecordBuilder::default();
-        let num_running_tasks = Arc::new(AtomicUsize::default());
-        let mut stream = Box::pin(stream);
-        let mut tasks = Vec::default();
-        let writer = Arc::new(sync::Mutex::new(Writer {
-            actions: Vec::default(),
-            count: 0,
-            inner: writer,
-        }));
-
-        let wait_for_commit = || async {
-            while num_running_tasks.load(Ordering::SeqCst) >= catalog.max_write_threads {
-                sleep(Duration::from_millis(10)).await;
-            }
-            num_running_tasks.fetch_add(1, Ordering::SeqCst);
-        };
-        let mut commit = |batch| {
-            let num_running_tasks = num_running_tasks.clone();
-            let writer = writer.clone();
-            tasks.push(spawn(async move {
-                let result = writer.lock().await.write(batch).await;
-                num_running_tasks.fetch_sub(1, Ordering::SeqCst);
-                result
-            }));
-        };
-
-        while let Some(file) = stream.try_next().await? {
-            if let Some(batch) = builder.push(catalog, &schema, file)? {
-                wait_for_commit().await;
-                commit(batch);
-            }
-        }
-        if let Some(batch) = builder.flush(&schema)? {
-            wait_for_commit().await;
-            commit(batch);
-        }
-        let () = tasks
-            .into_iter()
-            .collect::<stream::FuturesOrdered<_>>()
-            .map(|result| {
-                result
-                    .map_err(Error::from)
-                    .and_then(|result| result.map_err(Error::from))
-            })
-            .try_collect()
-            .await?;
-
-        let Writer {
-            actions,
-            count,
-            inner: _,
-        } = sync::Mutex::into_inner(Arc::into_inner(writer).expect("Writer is poisoned"));
-        if !actions.is_empty() {
-            let snapshot = table.snapshot()?;
-            let operation = DeltaOperation::Write {
-                mode: SaveMode::Append,
-                partition_by: {
-                    let partition_cols = snapshot.metadata().partition_columns.clone();
-                    if !partition_cols.is_empty() {
-                        Some(partition_cols)
-                    } else {
-                        None
-                    }
-                },
-                predicate: None,
-            };
-
-            let log_store = table.log_store();
-            let version = CommitBuilder::default()
-                .with_actions(actions)
-                .build(Some(snapshot), log_store, operation)
-                .await?
-                .version();
-            info!("{count} files are dumped on version {version}");
-        } else {
-            info!("No files are dumped");
-        }
+        let stream = file_stream_to_batch_stream(catalog, stream).await?;
+        commit_table(catalog, &self.dataset, stream).await?;
         Ok(())
+        // let Writer {
+        //     actions,
+        //     count,
+        //     inner: _,
+        // } = sync::Mutex::into_inner(Arc::into_inner(writer).expect("Writer is poisoned"));
+        // if !actions.is_empty() {
+        //     let snapshot = table.snapshot()?;
+        //     let operation = DeltaOperation::Write {
+        //         mode: SaveMode::Append,
+        //         partition_by: {
+        //             let partition_cols = snapshot.metadata().partition_columns.clone();
+        //             if !partition_cols.is_empty() {
+        //                 Some(partition_cols)
+        //             } else {
+        //                 None
+        //             }
+        //         },
+        //         predicate: None,
+        //     };
+
+        //     let log_store = table.log_store();
+        //     let version = CommitBuilder::default()
+        //         .with_actions(actions)
+        //         .build(Some(snapshot), log_store, operation)
+        //         .await?
+        //         .version();
+        //     info!("{count} files are dumped on version {version}");
+        // } else {
+        //     info!("No files are dumped");
+        // }
+        // Ok(())
     }
 }
 
@@ -409,7 +337,7 @@ impl DatasetPath {
             Scheme::S3 => {
                 let name = &self.name;
                 let rel = trim_rel_path(rel);
-                format!("s3a://{name}/{rel}")
+                format!("s3://{name}/{rel}")
             }
         }
     }
@@ -442,11 +370,11 @@ struct FileRecordBatch {
     pub atime: array::TimestampMicrosecondArray,
     pub ctime: array::TimestampMicrosecondArray,
     pub mtime: array::TimestampMicrosecondArray,
-    pub mode: array::Int32Array,
-    pub size: array::Int64Array,
-    pub chunk_id: array::Int64Array,
-    pub chunk_offset: array::Int64Array,
-    pub chunk_size: array::Int64Array,
+    pub mode: array::UInt32Array,
+    pub size: array::UInt64Array,
+    pub chunk_id: array::UInt64Array,
+    pub chunk_offset: array::UInt64Array,
+    pub chunk_size: array::UInt64Array,
     pub data: array::BinaryArray,
 }
 
@@ -549,12 +477,12 @@ struct FileRecordBuilder {
     pub atime: array::TimestampMicrosecondBuilder,
     pub ctime: array::TimestampMicrosecondBuilder,
     pub mtime: array::TimestampMicrosecondBuilder,
-    pub mode: array::Int32Builder,
-    pub size: array::Int64Builder,
-    pub total_size: u64,
-    pub chunk_id: array::Int64Builder,
-    pub chunk_offset: array::Int64Builder,
-    pub chunk_size: array::Int64Builder,
+    pub mode: array::UInt32Builder,
+    pub size: array::UInt64Builder,
+    pub total_size: usize,
+    pub chunk_id: array::UInt64Builder,
+    pub chunk_offset: array::UInt64Builder,
+    pub chunk_size: array::UInt64Builder,
     pub data: array::BinaryBuilder,
 }
 
@@ -565,11 +493,12 @@ impl FileRecordBuilder {
         schema: &SchemaRef,
         file: FileRecord,
     ) -> Result<Option<RecordBatch>> {
-        match self.total_size.checked_add(file.chunk_size) {
+        let chunk_size = file.chunk_size as _;
+        match self.total_size.checked_add(chunk_size) {
             Some(total_size) => {
                 let batch = if total_size > catalog.max_buffer_size {
                     let batch = self.flush(schema)?;
-                    self.total_size = file.chunk_size;
+                    self.total_size = chunk_size;
                     batch
                 } else {
                     self.total_size = total_size;
@@ -637,6 +566,8 @@ impl FileRecordBuilder {
     }
 }
 
+type FileRecordStream = Pin<Box<dyn Send + Stream<Item = Result<FileRecord>>>>;
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
@@ -652,11 +583,11 @@ pub struct FileRecord<T = Vec<u8>> {
 
 impl FileRecord {
     #[instrument(skip(catalog))]
-    async fn load<'a>(
-        catalog: &'a DatasetCatalog,
+    async fn load(
+        catalog: DatasetCatalog,
         root: PathBuf,
         path: &Path,
-    ) -> impl 'a + Stream<Item = Result<Self>> {
+    ) -> impl Stream<Item = Result<Self>> {
         let bail = |error: Error| stream::iter(vec![Err(error)]);
 
         let mut file = match fs::File::open(path).await {
@@ -758,15 +689,16 @@ impl FileRecord {
     }
 
     #[instrument(skip_all)]
-    async fn load_all<'a>(
-        catalog: &'a DatasetCatalog,
-        root: &'a Path,
-    ) -> Result<impl 'a + Stream<Item = Result<Self>>> {
+    async fn load_all(
+        catalog: DatasetCatalog,
+        root: &Path,
+    ) -> Result<impl 'static + Stream<Item = Result<Self>>> {
         let root = fs::canonicalize(root).await?;
         let pattern = format!("{}/**/*", root.to_string_lossy());
         let list = glob(&pattern).with_context(|| format!("Failed to list files on {root:?}"))?;
         Ok(stream::iter(list.filter_map(|path| path.ok()))
             .then(move |path| {
+                let catalog = catalog.clone();
                 let root = root.clone();
                 async move { Self::load(catalog, root, &path).await }
             })
@@ -828,64 +760,25 @@ impl FileRecord {
             .await
     }
 
-    fn columns() -> Vec<StructField> {
+    fn columns_arrow() -> Vec<ArrowField> {
+        let timestamp_micros = || ArrowDataType::Timestamp(ArrowTimeUnit::Microsecond, None);
         vec![
-            StructField::new(
-                "name".to_string(),
-                DataType::Primitive(PrimitiveType::String),
-                false,
-            ),
-            StructField::new(
-                "parent".to_string(),
-                DataType::Primitive(PrimitiveType::String),
-                false,
-            ),
-            StructField::new(
-                "atime".to_string(),
-                DataType::Primitive(PrimitiveType::TimestampNtz),
-                true,
-            ),
-            StructField::new(
-                "ctime".to_string(),
-                DataType::Primitive(PrimitiveType::TimestampNtz),
-                true,
-            ),
-            StructField::new(
-                "mtime".to_string(),
-                DataType::Primitive(PrimitiveType::TimestampNtz),
-                true,
-            ),
-            StructField::new(
-                "mode".to_string(),
-                DataType::Primitive(PrimitiveType::Integer),
-                true,
-            ),
-            StructField::new(
-                "size".to_string(),
-                DataType::Primitive(PrimitiveType::Long),
-                true,
-            ),
-            StructField::new(
-                "chunk_id".to_string(),
-                DataType::Primitive(PrimitiveType::Long),
-                false,
-            ),
-            StructField::new(
-                "chunk_offset".to_string(),
-                DataType::Primitive(PrimitiveType::Long),
-                false,
-            ),
-            StructField::new(
-                "chunk_size".to_string(),
-                DataType::Primitive(PrimitiveType::Long),
-                false,
-            ),
-            StructField::new(
-                "data".to_string(),
-                DataType::Primitive(PrimitiveType::Binary),
-                true,
-            ),
+            ArrowField::new("name", ArrowDataType::Utf8, false),
+            ArrowField::new("parent", ArrowDataType::Utf8, false),
+            ArrowField::new("atime", timestamp_micros(), true),
+            ArrowField::new("ctime", timestamp_micros(), true),
+            ArrowField::new("mtime", timestamp_micros(), true),
+            ArrowField::new("mode", ArrowDataType::UInt32, true),
+            ArrowField::new("size", ArrowDataType::UInt64, true),
+            ArrowField::new("chunk_id", ArrowDataType::UInt64, false),
+            ArrowField::new("chunk_offset", ArrowDataType::UInt64, false),
+            ArrowField::new("chunk_size", ArrowDataType::UInt64, false),
+            ArrowField::new("data", ArrowDataType::Binary, true),
         ]
+    }
+
+    fn schema_arrow() -> ArrowSchema {
+        ArrowSchema::new(Self::columns_arrow())
     }
 }
 
@@ -901,44 +794,82 @@ pub struct FileMetadataRecord {
 }
 
 #[instrument(skip_all)]
-async fn create_table(catalog: &DatasetCatalog, dataset: &DatasetPath) -> Result<DeltaTable> {
+async fn open_table(catalog: &DatasetCatalog, dataset: &DatasetPath) -> Result<Dataset> {
     let uri = dataset.to_uri(DIR_ROOTFS);
-    let ops = create_delta_ops(catalog, &uri).await?;
-    match &ops.0.state {
-        Some(_) => ops
-            .load()
-            .await
-            .map(|(table, _)| table)
-            .with_context(|| format!("Cannot load a rootfs table on {uri:?}")),
-        None => ops
-            .create()
-            .with_columns(FileRecord::columns())
-            .await
-            .with_context(|| format!("Cannot create a rootfs table on {uri:?}")),
+    match DatasetBuilder::from_uri(&uri)
+        .with_aws_credentials_provider(catalog.s3_credential_provider()?)
+        .with_commit_handler(catalog.commit_handler())
+        .with_object_store_registry(build_registry())
+        .with_storage_options(catalog.storage_options(false)?)
+        .load()
+        .await
+    {
+        Ok(dataset) => Ok(dataset),
+        Err(LanceError::DatasetNotFound { .. }) => bail!("Empty storage"),
+        Err(error) => Err(error).with_context(|| format!("Cannot open a rootfs table on {uri:?}")),
     }
 }
 
 #[instrument(skip_all)]
-async fn open_table(
+async fn commit_table(
     catalog: &DatasetCatalog,
     dataset: &DatasetPath,
-) -> Result<(DeltaTable, SendableRecordBatchStream)> {
+    stream: SendableRecordBatchStream,
+) -> Result<Dataset> {
     let uri = dataset.to_uri(DIR_ROOTFS);
-    let ops = create_delta_ops(catalog, &uri).await?;
-    if ops.0.state.is_none() {
-        bail!("Empty storage")
-    }
+    let (dest, mode) = {
+        let dest = WriteDestination::Uri(&uri);
+        let mode = WriteMode::Append;
+        (dest, mode)
+    };
 
-    ops.load()
+    let write_params = WriteParams {
+        commit_handler: Some(catalog.commit_handler()),
+        data_storage_version: Some(LanceFileVersion::Stable),
+        enable_move_stable_row_ids: false,
+        enable_v2_manifest_paths: true,
+        max_bytes_per_file: catalog.max_buffer_size,
+        mode,
+        object_store_registry: build_registry(),
+        progress: catalog.fragment_process(),
+        store_params: Some(catalog.storage_parameters()?),
+        ..Default::default()
+    };
+
+    InsertBuilder::new(dest)
+        .with_params(&write_params)
+        .execute_stream(stream)
         .await
-        .with_context(|| format!("Cannot open a rootfs table on {uri:?}"))
+        .with_context(|| format!("Failed to commit stream to {dataset}"))
 }
 
-#[instrument(skip(catalog))]
-async fn create_delta_ops(catalog: &DatasetCatalog, uri: &str) -> Result<DeltaOps> {
-    DeltaOps::try_from_uri_with_storage_options(uri, catalog.storage_options()?)
-        .await
-        .with_context(|| format!("Cannot init a rootfs table on {uri:?}"))
+async fn file_stream_to_batch_stream(
+    catalog: &DatasetCatalog,
+    mut stream: FileRecordStream,
+) -> Result<SendableRecordBatchStream> {
+    let schema = Arc::new(FileRecord::schema_arrow());
+
+    let (tx, rx) = mpsc::channel(catalog.max_write_threads);
+
+    spawn({
+        let arrow_schema = schema.clone();
+        let catalog = catalog.clone();
+        async move {
+            let mut builder = FileRecordBuilder::default();
+            while let Some(file) = stream.try_next().await? {
+                if let Some(batch) = builder.push(&catalog, &arrow_schema, file)? {
+                    tx.send(Result::<_, DataFusionError>::Ok(batch)).await?;
+                }
+            }
+            if let Some(batch) = builder.flush(&arrow_schema)? {
+                tx.send(Result::<_, DataFusionError>::Ok(batch)).await?;
+            }
+            Result::<_, Error>::Ok(())
+        }
+    });
+
+    let stream = RecordBatchStreamAdapter::new(schema, ReceiverStream::new(rx));
+    Ok(Box::pin(stream))
 }
 
 fn trim_rel_path(mut path: &str) -> &str {

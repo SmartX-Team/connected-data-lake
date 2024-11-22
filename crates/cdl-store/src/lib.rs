@@ -6,63 +6,75 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use cdl_catalog::DatasetCatalog;
-use deltalake::{
-    aws::{storage::S3ObjectStoreFactory, S3LogStoreFactory},
-    logstore::logstores,
-    storage::{
-        factories,
-        file::FileStorageBackend,
-        object_store::{
-            GetOptions, GetRange, MultipartUpload, PutMultipartOpts, PutOptions, PutPayload,
-            PutResult,
-        },
-        GetResult, ListResult, ObjectStoreFactory, ObjectStoreRef, ObjectStoreResult,
-        StorageOptions,
-    },
-    DeltaResult, DeltaTableError, ObjectMeta, ObjectStore, ObjectStoreError, Path,
-};
 use futures::{
+    executor::block_on,
     stream::{self, BoxStream},
     StreamExt, TryStreamExt,
 };
 use glob::{glob, PatternError};
+use lance_core::{Error as LanceError, Result as LanceResult};
+use lance_io::object_store::{
+    ObjectStore as S3ObjectStore, ObjectStoreParams, ObjectStoreProvider, ObjectStoreRegistry,
+    StorageOptions,
+};
+use object_store::{
+    local::LocalFileSystem, path::Path, Error as ObjectStoreError, GetOptions, GetRange, GetResult,
+    ListResult, MultipartUpload, ObjectMeta, ObjectStore, PutMultipartOpts, PutOptions, PutPayload,
+    PutResult, Result as ObjectStoreResult,
+};
 use tokio::fs;
-use tracing::{debug, info};
+use tracing::info;
 use url::Url;
+
+type ObjectStoreRef = Arc<dyn ObjectStore>;
 
 const NAME: &str = "CachedStorage";
 
-/// Register an [ObjectStoreFactory]
-pub fn register_handlers() {
-    debug!("Registering store: S3");
-    let object_stores = Arc::new(CachedObjectStoreFactory::default());
-    let log_stores = Arc::new(S3LogStoreFactory::default());
-    for scheme in ["s3", "s3a"].iter() {
-        let url = Url::parse(&format!("{}://", scheme)).unwrap();
-        factories().insert(url.clone(), object_stores.clone());
-        logstores().insert(url.clone(), log_stores.clone());
-    }
+pub fn build_registry() -> Arc<ObjectStoreRegistry> {
+    let mut registry = ObjectStoreRegistry::default();
+    registry.insert("s3a", Arc::new(CachedObjectStoreProvider::default()));
+    Arc::new(registry)
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct CachedObjectStoreFactory {
-    backend: S3ObjectStoreFactory,
-}
+pub struct CachedObjectStoreProvider {}
 
-impl ObjectStoreFactory for CachedObjectStoreFactory {
-    fn parse_url_opts(
-        &self,
-        url: &Url,
-        options: &StorageOptions,
-    ) -> DeltaResult<(ObjectStoreRef, Path)> {
-        self.backend
-            .parse_url_opts(url, options)
-            .and_then(|(backend, path)| {
-                match CachedObjectStoreBackend::load_local(backend, options)? {
-                    Ok(cached) => Ok((Arc::new(cached) as ObjectStoreRef, path)),
-                    Err(backend) => Ok((backend, path)),
-                }
-            })
+impl ObjectStoreProvider for CachedObjectStoreProvider {
+    fn new_store(&self, base_path: Url, params: &ObjectStoreParams) -> LanceResult<S3ObjectStore> {
+        let mut s3_path = base_path.clone();
+        s3_path.set_scheme("s3").unwrap();
+
+        let options = StorageOptions::from(params.storage_options.clone().unwrap_or_default());
+        let registry = Arc::default();
+        block_on(S3ObjectStore::from_uri_and_params(
+            registry,
+            s3_path.as_str(),
+            params,
+        ))
+        .and_then(|(backend, _)| {
+            let block_size = Some(backend.block_size());
+            let download_retry_count = options.download_retry_count();
+            let io_parallelism = backend.io_parallelism();
+            let list_is_lexically_ordered = backend.list_is_lexically_ordered;
+            let use_constant_size_upload_parts = backend.use_constant_size_upload_parts;
+
+            let location = base_path;
+            let store = match CachedObjectStoreBackend::load_local(backend.inner, &options)? {
+                Ok(cached) => Arc::new(cached),
+                Err(backend) => backend,
+            };
+            let wrapper = None;
+            Ok(S3ObjectStore::new(
+                store,
+                location,
+                block_size,
+                wrapper,
+                use_constant_size_upload_parts,
+                list_is_lexically_ordered,
+                io_parallelism,
+                download_retry_count,
+            ))
+        })
     }
 }
 
@@ -78,8 +90,8 @@ impl CachedObjectStoreBackend {
     pub fn load_local(
         backend: ObjectStoreRef,
         options: &StorageOptions,
-    ) -> DeltaResult<Result<Self, ObjectStoreRef>> {
-        fn parse_key<T>(options: &StorageOptions, key: &str) -> DeltaResult<Option<T>>
+    ) -> LanceResult<Result<Self, ObjectStoreRef>> {
+        fn parse_key<T>(options: &StorageOptions, key: &str) -> LanceResult<Option<T>>
         where
             T: FromStr,
         {
@@ -87,9 +99,9 @@ impl CachedObjectStoreBackend {
                 .0
                 .get(key)
                 .map(|value| {
-                    value
-                        .parse()
-                        .map_err(|_| DeltaTableError::generic(format!("Failed to parse {key}")))
+                    value.parse().map_err(|_| LanceError::InvalidRef {
+                        message: format!("Failed to parse {key}"),
+                    })
                 })
                 .transpose()
         }
@@ -109,7 +121,7 @@ impl CachedObjectStoreBackend {
                 backend,
                 cache: {
                     ::std::fs::create_dir_all(&cache_dir)?;
-                    Arc::new(FileStorageBackend::try_new(&cache_dir)?)
+                    Arc::new(LocalFileSystem::new_with_prefix(&cache_dir)?)
                 },
                 cache_dir,
                 threshold_object_size,

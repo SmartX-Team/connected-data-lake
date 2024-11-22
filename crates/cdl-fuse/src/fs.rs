@@ -3,12 +3,12 @@ use std::{ffi::OsStr, sync::Arc, time::SystemTime};
 use anyhow::Result;
 use cdl_catalog::DatasetCatalog;
 use cdl_fs::GlobalPath;
-use deltalake::DeltaTable;
 use fuser::{
     Filesystem, KernelConfig, ReplyAttr, ReplyBmap, ReplyCreate, ReplyData, ReplyDirectory,
     ReplyDirectoryPlus, ReplyEmpty, ReplyEntry, ReplyIoctl, ReplyLock, ReplyLseek, ReplyOpen,
     ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
 };
+use lance::Dataset;
 use libc::{c_int, ENOSYS, EPERM};
 use tokio::runtime::Handle;
 use tracing::{debug, instrument, warn, Level};
@@ -16,7 +16,7 @@ use tracing::{debug, instrument, warn, Level};
 pub struct CdlFS {
     catalog: DatasetCatalog,
     handle: Handle,
-    table: Arc<DeltaTable>,
+    table: Arc<Dataset>,
 }
 
 impl CdlFS {

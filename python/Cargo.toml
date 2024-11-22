@@ -24,22 +24,15 @@ doc = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = ["default-tls"]
-
-# TLS
-default-tls = ["rustls-tls"]
-openssl-tls = ["cdl-catalog/openssl-tls", "cdl-fs/openssl-tls"]
-rustls-tls = ["cdl-catalog/rustls-tls", "cdl-fs/rustls-tls"]
-
 [dependencies]
 cdl-catalog = { path = "../crates/cdl-catalog", features = ["serde"] }
 cdl-fs = { path = "../crates/cdl-fs" }
 
 anyhow = { workspace = true }
 ark-core = { workspace = true }
+arrow = { workspace = true, features = ["pyarrow"] }
 clap = { workspace = true }
-deltalake = { workspace = true, features = ["python"] }
+datafusion = { workspace = true }
 futures = { workspace = true }
 pyo3 = { workspace = true, features = [
     "abi3-py310",

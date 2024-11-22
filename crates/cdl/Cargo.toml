@@ -20,20 +20,10 @@ workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["default-tls"]
+default = []
 
-# TLS
-default-tls = ["rustls-tls"]
-openssl-tls = [
-    "cdl-catalog/openssl-tls",
-    "cdl-fs/openssl-tls",
-    "cdl-fuse/openssl-tls",
-]
-rustls-tls = [
-    "cdl-catalog/rustls-tls",
-    "cdl-fs/rustls-tls",
-    "cdl-fuse/openssl-tls",
-]
+# H/W
+gpu-nvidia = ["cdl-fs/gpu-nvidia"]
 
 [dependencies]
 cdl-catalog = { path = "../cdl-catalog" }

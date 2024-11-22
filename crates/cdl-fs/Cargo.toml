@@ -23,30 +23,25 @@ workspace = true
 default = []
 serde = ["dep:serde"]
 
-# TLS
-openssl-tls = [
-    "cdl-catalog/openssl-tls",
-    "cdl-store/openssl-tls",
-    "deltalake/s3-native-tls",
-]
-rustls-tls = [
-    "cdl-catalog/openssl-tls",
-    "cdl-store/openssl-tls",
-    "deltalake/s3",
-]
+# H/W
+gpu-nvidia = ["lance/tensorflow"]
 
 [dependencies]
 cdl-catalog = { path = "../cdl-catalog" }
 cdl-store = { path = "../cdl-store" }
 
 anyhow = { workspace = true }
+arrow = { workspace = true }
 chrono = { workspace = true }
-deltalake = { workspace = true, features = ["datafusion"] }
+datafusion = { workspace = true }
 filetime = { workspace = true }
 futures = { workspace = true }
 glob = { workspace = true }
 itertools = { workspace = true }
+lance = { workspace = true }
+lance-encoding = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 strum = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
+tokio-stream = { workspace = true }
 tracing = { workspace = true }

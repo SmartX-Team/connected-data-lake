@@ -1,17 +1,13 @@
 use std::{any::Any, sync::Arc};
 
-use deltalake::{
-    arrow::{
-        array::{Array, AsArray, Int64Array},
-        datatypes::DataType,
-    },
-    datafusion::{
-        error::Result,
-        logical_expr::{
-            ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, TypeSignature, Volatility,
-        },
-        scalar::ScalarValue,
-    },
+use arrow::{
+    array::{Array, AsArray, Int64Array},
+    datatypes::DataType,
+};
+use datafusion::{
+    error::Result,
+    logical_expr::{ColumnarValue, ScalarUDF, ScalarUDFImpl, Signature, TypeSignature, Volatility},
+    scalar::ScalarValue,
 };
 use itertools::Itertools;
 

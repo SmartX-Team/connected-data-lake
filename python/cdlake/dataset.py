@@ -1,18 +1,16 @@
 from cdlake._internal import CdlFS
-import pyarrow as pa
+import lance
 import torch
 
 
 class CdlTorchDataset(torch.utils.data.Dataset[torch.Tensor]):
     def __init__(
         self,
-        batch: pa.RecordBatch,
-        batch_size: int,
+        dataset: lance.LanceDataset,
         fs: CdlFS,
     ) -> None:
         super().__init__()
-        self._batch = batch
-        self._batch_size = batch_size
+        self._dataset = dataset
         self._fs = fs
 
     def __getitem__(

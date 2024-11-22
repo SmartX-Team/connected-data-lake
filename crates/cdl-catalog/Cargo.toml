@@ -23,14 +23,11 @@ workspace = true
 default = []
 serde = ["dep:serde", "url/serde"]
 
-# TLS
-openssl-tls = ["deltalake/s3-native-tls"]
-rustls-tls = ["deltalake/s3"]
-
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
-deltalake = { workspace = true }
+lance = { workspace = true }
+lance-table = { workspace = true }
+object_store = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
-strum = { workspace = true, features = ["derive"] }
 url = { workspace = true }
