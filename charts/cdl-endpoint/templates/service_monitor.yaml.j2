@@ -1,0 +1,20 @@
+{{- if eq .Values.serviceMonitor.enabled true }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "cdl-endpoint.labels" . | nindent 4 }}
+spec:
+  endpoints:
+    - port: metrics
+      interval:
+        {{- toYaml .Values.serviceMonitor.interval | nindent 8 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      {{- toYaml .Values.serviceMonitor.matchLabels | nindent 6 }}
+{{- end }}

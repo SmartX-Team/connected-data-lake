@@ -1,0 +1,46 @@
+---
+# Default values for data-pond.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+clusterName: ops.openark
+nameOverride: ""
+fullnameOverride: ""
+
+minio:
+  console:
+    addressPool: null
+    ip: null
+  endpoint:
+    addressPool: null
+    ip: null
+
+remote:
+  endpoint: https://s3.amazonaws.com
+
+resources:
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  requests:
+    storage: 10Ti
+
+runtimeClassName: ""
+storageClassName: ceph-block
+
+secret:
+  ref:
+    mapAccessKey: CONSOLE_ACCESS_KEY
+    mapSecretKey: CONSOLE_SECRET_KEY
+  nameOverride: ""
+  value:
+    enabled: false
+    accessKey: ""
+    secretKey: ""
+
+# options: ["Owned", "Remote", "Shared"]
+storageType: Owned
+
+totalNodes: 1
+totalVolumesPerNode: 4

@@ -1,0 +1,38 @@
+{{- if eq .Values.claim.enabled false }}
+---
+apiVersion: cdl.ulagbulag.io/v1alpha1
+kind: ModelStorageBinding
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "cdl-dataset.labels" . | nindent 4 }}
+spec:
+  deletionPolicy:
+    {{- toYaml .Values.deletionPolicy | nindent 4 }}
+  model: {{ .Release.Name }}
+  resources:
+    {{- toYaml .Values.resources | nindent 4 }}
+  storage:
+    {{- if .Values.static.sourceStorageName }}
+    cloned:
+    {{- else }}
+    owned:
+    {{- end }}
+      {{- if .Values.static.sourceStorageName }}
+      source:
+        {{- toYaml .Values.static.sourceStorageName | nindent 8 }}
+      {{- if .Values.static.sourceBindingName }}
+      sourceBindingName:
+        {{- toYaml .Values.static.sourceBindingName | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      target:
+        {{- toYaml .Values.static.targetStorageName | nindent 8 }}
+      {{- if .Values.static.sourceStorageName }}
+      syncPolicy:
+        pull:
+          {{- toYaml .Values.static.syncPolicy.pull | nindent 10 }}
+        push:
+          {{- toYaml .Values.static.syncPolicy.push | nindent 10 }}
+      {{- end }}
+{{- end }}

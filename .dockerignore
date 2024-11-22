@@ -29,3 +29,20 @@ Cargo.lock
 /logs
 /rootfs
 /test
+
+# Containers
+/.containerignore
+/.dockerignore
+/Containerfile
+/Dockerfile
+
+# Development environment
+/Makefile
+/Justfile
+
+# Documentations
+/docs
+/README.md
+
+# Helm charts
+/charts

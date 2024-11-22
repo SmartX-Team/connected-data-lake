@@ -1,0 +1,39 @@
+[package]
+name = "cdl-openapi"
+
+authors = { workspace = true }
+description = { workspace = true }
+documentation = { workspace = true }
+edition = { workspace = true }
+include = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lints]
+workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = []
+k8s = ["dep:kube", "dep:serde_json"]
+
+[dependencies]
+cdl-k8s-core = { path = "../cdl-k8s-core", features = ["openapi"] }
+
+anyhow = { workspace = true }
+byte-unit = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+k8s-openapi = { workspace = true }
+kube = { workspace = true, optional = true, features = ["derive"] }
+maplit = { workspace = true }
+ordered-float = { workspace = true, features = ["schemars", "serde"] }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+strum = { workspace = true }

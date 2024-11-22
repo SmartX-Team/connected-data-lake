@@ -1,0 +1,143 @@
+---
+# Default values for cdl-endpoint.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: registry.k8s.io/ingress-nginx/controller
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: v1.10.0
+
+clusterName: ops.openark
+nameOverride: ""
+fullnameOverride: ""
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - preference:
+          matchExpressions:
+            - key: node-role.kubernetes.io/kiss-ephemeral-control-plane
+              operator: DoesNotExist
+        weight: 1
+      - preference:
+          matchExpressions:
+            - key: node-role.kubernetes.io/kiss
+              operator: In
+              values:
+                - ControlPlane
+        weight: 2
+      - preference:
+          matchExpressions:
+            - key: node-role.kubernetes.io/kiss
+              operator: In
+              values:
+                - Compute
+        weight: 4
+      - preference:
+          matchExpressions:
+            - key: node-role.kubernetes.io/kiss
+              operator: In
+              values:
+                - Gateway
+        weight: 8
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/kiss
+              operator: In
+              values:
+                - Compute
+                - ControlPlane
+                - Desktop
+                - Gateway
+  podAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: cdl.ulagbulag.io/modelstorage-type
+                operator: In
+                values:
+                  - object-storage
+          topologyKey: kubernetes.io/hostname
+        weight: 32
+
+env: []
+
+ingress:
+  extraConfigs: {}
+  hostname: ""
+  labels:
+    nginx.ingress.kubernetes.io/proxy-body-size: 100M
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+ingressClassNameOverride: ""
+ingressControllerNameOverride: ""
+
+nodeSelector: {}
+podAnnotations: {}
+podLabels: {}
+podSecurityContext: {}
+priorityClassName: k8s-cluster-critical
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    add:
+      - NET_BIND_SERVICE
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 101
+
+service:
+  endpoint:
+    loadBalancerIP: null
+    type: ClusterIP
+    ports:
+      http: 80
+      https: 443
+  metrics:
+    loadBalancerIP: null
+    type: ClusterIP
+    port: 10254
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  matchLabels:
+    cdl.ulagbulag.io/modelstorage-service: metrics
+
+resources:
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  limits:
+    cpu: "8"
+    memory: 16Gi
+  # requests:
+  #   cpu: "8"
+  #   memory: 16Gi
+
+terminationGracePeriodSeconds: 30
+
+extraVolumes: []
+extraVolumeMounts: []

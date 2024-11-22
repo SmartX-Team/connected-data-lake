@@ -1,0 +1,52 @@
+{{/*
+  When owned or shared mode, the release name should be fixed.
+*/}}
+{{- if or (contains "Owned" .Values.storageType) (contains "Shared" .Values.storageType) }}
+{{- if not (contains "object-storage-pool" .Release.Name) }}
+{{- fail "The helm release name should be \"object-storage-pool\"" }}
+{{- end }}
+{{- end }}
+---
+apiVersion: cdl.ulagbulag.io/v1alpha1
+kind: ModelStorage
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "data-pond.labels" . | nindent 4 }}
+spec:
+  objectStorage:
+    {{- if contains "Owned" .Values.storageType }}
+    owned:
+    {{- else if contains "Remote" .Values.storageType }}
+    borrowed:
+    {{- else if contains "Shared" .Values.storageType }}
+    cloned:
+    {{- else }}
+    {{- fail "value for .Values.storageType is not as expected" }}
+    {{- end }}
+      {{- if or (contains "Owned" .Values.storageType) (contains "Shared" .Values.storageType) }}
+      minioConsoleExternalService:
+        {{- toYaml .Values.minio.console | nindent 10 }}
+      minioExternalService:
+        {{- toYaml .Values.minio.endpoint | nindent 10 }}
+      resources:
+        {{- toYaml .Values.resources | nindent 8 }}
+      runtimeClassName:
+        {{- toYaml .Values.runtimeClassName | nindent 8 }}
+      storageClassName:
+        {{- toYaml .Values.storageClassName | nindent 8 }}
+      totalNodes:
+        {{- toYaml .Values.totalNodes | nindent 8 }}
+      totalVolumesPerNode:
+        {{- toYaml .Values.totalVolumesPerNode | nindent 8 }}
+      {{- end }}
+      {{- if or (contains "Remote" .Values.storageType) (contains "Shared" .Values.storageType) }}
+      endpoint:
+        {{- toYaml .Values.remote.endpoint | nindent 8 }}
+      secretRef:
+        mapAccessKey:
+          {{- toYaml .Values.secret.ref.mapAccessKey | nindent 10 }}
+        mapSecretKey:
+          {{- toYaml .Values.secret.ref.mapSecretKey | nindent 10 }}
+        name: {{ include "data-pond.secretName" . }}
+      {{- end }}

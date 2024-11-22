@@ -1,0 +1,25 @@
+{{- if eq .Values.claim.enabled true }}
+---
+apiVersion: cdl.ulagbulag.io/v1alpha1
+kind: ModelClaim
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "cdl-dataset.labels" . | nindent 4 }}
+spec:
+  affinity:
+    {{- toYaml .Values.claim.affinity | nindent 4 }}
+  allowReplacement:
+    {{- toYaml .Values.claim.allowReplacement | nindent 4 }}
+  bindingPolicy:
+    {{- toYaml .Values.claim.bindingPolicy | nindent 4 }}
+  deletionPolicy:
+    {{- toYaml .Values.deletionPolicy | nindent 4 }}
+  resources:
+    {{- toYaml .Values.resources | nindent 4 }}
+  storage: ObjectStorage
+  {{- if .Values.static.targetStorageName }}
+  storageName:
+    {{- toYaml .Values.static.targetStorageName | nindent 4 }}
+  {{- end }}
+{{- end }}

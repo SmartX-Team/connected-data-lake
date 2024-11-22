@@ -1,0 +1,55 @@
+[package]
+name = "cdl-k8s-provider"
+
+authors = { workspace = true }
+description = { workspace = true }
+documentation = { workspace = true }
+edition = { workspace = true }
+include = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lints]
+workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = []
+
+# TLS
+default-tls = ["rustls-tls"]
+openssl-tls = [
+    "cdl-k8s-core/openssl-tls",
+    "kube/openssl-tls",
+    "minio/native-tls",
+]
+rustls-tls = ["cdl-k8s-core/rustls-tls", "kube/rustls-tls", "minio/rustls-tls"]
+
+[dependencies]
+cdl-k8s-core = { path = "../cdl-k8s-core", features = ["openapi"] }
+cdl-openapi = { path = "../cdl-openapi", features = ["k8s"] }
+
+anyhow = { workspace = true }
+argon2 = { workspace = true }
+chrono = { workspace = true }
+byte-unit = { workspace = true, features = ["serde"] }
+bytes = { workspace = true }
+futures = { workspace = true }
+itertools = { workspace = true }
+k8s-openapi = { workspace = true }
+kube = { workspace = true, features = ["client", "runtime", "ws"] }
+maplit = { workspace = true }
+minio = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sio = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

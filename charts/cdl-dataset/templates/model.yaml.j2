@@ -1,0 +1,11 @@
+{{- if eq .Values.claim.enabled false }}
+---
+apiVersion: cdl.ulagbulag.io/v1alpha1
+kind: Model
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "cdl-dataset.labels" . | nindent 4 }}
+spec:
+  dynamic: {}
+{{- end }}

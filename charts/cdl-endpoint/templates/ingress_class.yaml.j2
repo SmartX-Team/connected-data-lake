@@ -1,0 +1,9 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: {{ include "cdl-endpoint.ingressClassName" . }}
+  labels:
+    {{- include "cdl-endpoint.labels" . | nindent 4 }}
+spec:
+  controller: {{ include "cdl-endpoint.ingressControllerName" . }}
