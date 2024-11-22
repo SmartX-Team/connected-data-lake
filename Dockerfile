@@ -11,7 +11,14 @@ FROM docker.io/library/debian:${DEBIAN_VERSION} AS server
 
 # Server Configuration
 WORKDIR /usr/local/bin
-CMD [ "/bin/sh" ]
+CMD [ "/usr/local/bin/${PACKAGE}" ]
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    fuse \
+    # Cleanup
+    && apt-get clean all \
+    && rm -rf /var/lib/apt/lists/*
 
 # Be ready for building
 FROM docker.io/library/rust:1-${DEBIAN_VERSION} AS builder
@@ -19,6 +26,15 @@ FROM docker.io/library/rust:1-${DEBIAN_VERSION} AS builder
 # Load source files
 ADD . /src
 WORKDIR /src
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    libfuse-dev \
+    libprotoc-dev \
+    protobuf-compiler \
+    # Cleanup
+    && apt-get clean all \
+    && rm -rf /var/lib/apt/lists/*
 
 # Build it!
 ENV RUST_MIN_STACK=2097152
@@ -30,7 +46,7 @@ RUN \
     # Create an output directory
     mkdir /out \
     # Build
-    && cargo build --package "${PACKAGE}" --release --workspace \
+    && cargo build --package "${PACKAGE}" --release \
     && mv "./target/release/${PACKAGE}" /out \
     && mv ./LICENSE /LICENSE
 
