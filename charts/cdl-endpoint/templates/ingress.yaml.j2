@@ -3,11 +3,12 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ .Release.Name }}
-  labels:
-    {{- include "cdl-endpoint.labels" . | nindent 4 }}
-	  {{- with .Values.ingress.labels }}
+  annotations:
+	  {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
+  labels:
+    {{- include "cdl-endpoint.labels" . | nindent 4 }}
 spec:
   ingressClassName: {{ include "cdl-endpoint.ingressClassName" . }}
   rules:
@@ -20,3 +21,44 @@ spec:
                 name: minio
                 port:
                   name: http-minio
+{{- if .Values.ingress.external.hostname }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: "{{ .Release.Name }}-public"
+  annotations:
+    ingress.kubernetes.io/force-ssl-redirect: "true"
+    ingress.kubernetes.io/secure-backends: "true"
+    ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/upstream-vhost: object-storage
+	  {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+	  {{- with .Values.ingress.external.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  labels:
+    {{- include "cdl-endpoint.labels" . | nindent 4 }}
+spec:
+  ingressClassName:
+    {{- toYaml .Values.ingress.external.ingressClassName | nindent 4 }}
+  tls:
+    - secretName:
+        {{- toYaml .Values.ingress.external.hostname | nindent 8 }}
+      hosts:
+        -
+          {{- toYaml .Values.ingress.external.hostname | nindent 10 }}
+  rules:
+    - host:
+        {{- toYaml .Values.ingress.external.hostname | nindent 8 }}
+      http:
+        paths:
+          - backend:
+              service:
+                name: object-storage
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+{{- end }}

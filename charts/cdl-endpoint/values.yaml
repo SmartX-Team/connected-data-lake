@@ -69,12 +69,15 @@ affinity:
 env: []
 
 ingress:
-  extraConfigs: {}
-  hostname: ""
-  labels:
-    nginx.ingress.kubernetes.io/proxy-body-size: 100M
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 4G
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  external:
+    annotations: {}
+    hostname: ""
+    ingressClassName: ""
+  extraConfigs: {}
 
 ingressClassNameOverride: ""
 ingressControllerNameOverride: ""

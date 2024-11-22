@@ -6,9 +6,6 @@ metadata:
   annotations:
     coredns.io/hostname: {{ .Values.ingress.hostname }}
   labels:
-    ark.ulagbulag.io/is-external: "true"
-    {{- if .Values.ingress.hostname }}
-    {{- end }}
     {{- include "cdl-endpoint.labels" . | nindent 4 }}
 spec:
   loadBalancerIP: {{ .Values.service.endpoint.loadBalancerIP }}
