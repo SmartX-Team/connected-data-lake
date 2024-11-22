@@ -73,4 +73,4 @@ oci-push-and-update-operator: oci-push-operator
 
 helm-clean-install:
   helm uninstall -n "cdl-operator" "cdl-operator" || true
-  helm install -n "cdl-operator" "cdl-operator" "./charts/cdl-operator"
+  helm install --create-namespace -n "cdl-operator" "cdl-operator" "./charts/cdl-operator"
