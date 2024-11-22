@@ -25,6 +25,16 @@ entries:
   cdl-operator:
   - apiVersion: v2
     appVersion: latest-devel
+    created: "2024-11-22T16:12:20.795424985Z"
+    description: Convenient Connected Data Lake operator deployment tool
+    digest: 3de132739fd4815775df6f4d6decbd00275fe7e223309df2eefaa6b79554c8a6
+    name: cdl-operator
+    type: application
+    urls:
+    - https://github.com/SmartX-Team/connected-data-lake/releases/download/cdl-operator-0.1.1/cdl-operator-0.1.1.tgz
+    version: 0.1.1
+  - apiVersion: v2
+    appVersion: latest-devel
     created: "2024-11-22T15:43:00.260871751Z"
     description: Convenient Connected Data Lake operator deployment tool
     digest: 35190f810485e5187a7303515613e942c7d1eb4d43c61e5795005605457ead88
@@ -44,4 +54,4 @@ entries:
     urls:
     - https://github.com/SmartX-Team/connected-data-lake/releases/download/data-pond-0.1.5/data-pond-0.1.5.tgz
     version: 0.1.5
-generated: "2024-11-22T15:43:00.418726995Z"
+generated: "2024-11-22T16:12:20.795441135Z"
