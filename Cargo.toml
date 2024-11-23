@@ -22,6 +22,18 @@ version = "0.1.4"
 blocks_in_conditions = "allow" # opentelemetry tracing macro would be noisy
 
 [workspace.dependencies]
+cdl = { version = "0.1.4", path = "crates/cdl", default-features = false }
+cdl-catalog = { version = "0.1.4", path = "crates/cdl-catalog", default-features = false }
+cdl-core = { version = "0.1.4", path = "crates/cdl-core", default-features = false }
+cdl-fs = { version = "0.1.4", path = "crates/cdl-fs", default-features = false }
+cdl-fuse = { version = "0.1.4", path = "crates/cdl-fuse", default-features = false }
+cdl-k8s-core = { version = "0.1.4", path = "crates/cdl-k8s-core", default-features = false }
+cdl-k8s-operator = { version = "0.1.4", path = "crates/cdl-k8s-operator", default-features = false }
+cdl-k8s-provider = { version = "0.1.4", path = "crates/cdl-k8s-provider", default-features = false }
+cdl-openapi = { version = "0.1.4", path = "crates/cdl-openapi", default-features = false }
+cdl-python = { version = "0.1.4", path = "python", default-features = false }
+cdl-store = { version = "0.1.4", path = "crates/cdl-store", default-features = false }
+
 anyhow = { version = "1.0", features = ["backtrace"] }
 argon2 = { version = "0.5" }
 arrow = { version = "52", default-features = false, features = [ # depends: lance

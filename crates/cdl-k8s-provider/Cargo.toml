@@ -32,8 +32,8 @@ openssl-tls = [
 rustls-tls = ["cdl-k8s-core/rustls-tls", "kube/rustls-tls", "minio/rustls-tls"]
 
 [dependencies]
-cdl-k8s-core = { path = "../cdl-k8s-core", features = ["openapi"] }
-cdl-openapi = { path = "../cdl-openapi", features = ["k8s"] }
+cdl-k8s-core = { workspace = true, features = ["openapi"] }
+cdl-openapi = { workspace = true, features = ["k8s"] }
 
 anyhow = { workspace = true }
 argon2 = { workspace = true }

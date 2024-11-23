@@ -38,14 +38,14 @@ rustls-tls = [
 ]
 
 [dependencies]
-cdl-k8s-core = { path = "../cdl-k8s-core", features = [
+cdl-k8s-core = { workspace = true, features = [
     "env",
     "k8s-operator",
     "opentelemetry-all",
     "opentelemetry-otlp",
 ] }
-cdl-k8s-provider = { path = "../cdl-k8s-provider" }
-cdl-openapi = { path = "../cdl-openapi", features = ["k8s"] }
+cdl-k8s-provider = { workspace = true }
+cdl-openapi = { workspace = true, features = ["k8s"] }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }

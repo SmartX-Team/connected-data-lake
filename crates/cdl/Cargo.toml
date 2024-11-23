@@ -26,9 +26,9 @@ default = []
 gpu-nvidia = ["cdl-fs/gpu-nvidia"]
 
 [dependencies]
-cdl-catalog = { path = "../cdl-catalog" }
-cdl-fs = { path = "../cdl-fs" }
-cdl-k8s-core = { path = "../cdl-k8s-core", features = ["opentelemetry-all"] }
+cdl-catalog = { workspace = true }
+cdl-fs = { workspace = true }
+cdl-k8s-core = { workspace = true, features = ["opentelemetry-all"] }
 
 anyhow = { workspace = true }
 clap = { workspace = true }
@@ -36,4 +36,4 @@ tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-cdl-fuse = { path = "../cdl-fuse" }
+cdl-fuse = { workspace = true }

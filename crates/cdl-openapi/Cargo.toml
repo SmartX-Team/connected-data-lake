@@ -24,7 +24,7 @@ default = []
 k8s = ["dep:kube", "dep:serde_json"]
 
 [dependencies]
-cdl-k8s-core = { path = "../cdl-k8s-core", features = ["openapi"] }
+cdl-k8s-core = { workspace = true, features = ["openapi"] }
 
 anyhow = { workspace = true }
 byte-unit = { workspace = true }

@@ -27,8 +27,8 @@ serde = ["dep:serde"]
 gpu-nvidia = ["lance/tensorflow"]
 
 [dependencies]
-cdl-catalog = { path = "../cdl-catalog" }
-cdl-store = { path = "../cdl-store" }
+cdl-catalog = { workspace = true }
+cdl-store = { workspace = true }
 
 anyhow = { workspace = true }
 arrow = { workspace = true }

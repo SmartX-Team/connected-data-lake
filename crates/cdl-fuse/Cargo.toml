@@ -20,8 +20,8 @@ workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cdl-catalog = { path = "../cdl-catalog" }
-cdl-fs = { path = "../cdl-fs" }
+cdl-catalog = { workspace = true }
+cdl-fs = { workspace = true }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }

@@ -25,11 +25,9 @@ doc = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cdl-catalog = { path = "../crates/cdl-catalog", features = ["serde"] }
-cdl-fs = { path = "../crates/cdl-fs" }
-cdl-k8s-core = { path = "../crates/cdl-k8s-core", features = [
-    "opentelemetry-all",
-] }
+cdl-catalog = { workspace = true, features = ["serde"] }
+cdl-fs = { workspace = true }
+cdl-k8s-core = { workspace = true, features = ["opentelemetry-all"] }
 
 anyhow = { workspace = true }
 arrow = { workspace = true, features = ["pyarrow"] }
