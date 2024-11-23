@@ -128,4 +128,4 @@ lance-encoding = { git = "https://github.com/ulagbulag/lance.git", rev = "24f388
 lance-io = { git = "https://github.com/ulagbulag/lance.git", rev = "24f38842d47333925184f9501cd337fe4e2266b5" }
 lance-table = { git = "https://github.com/ulagbulag/lance.git", rev = "24f38842d47333925184f9501cd337fe4e2266b5" }
 minio = { git = "https://github.com/minio/minio-rs.git", rev = "c28f576cb8f8cf47fb941bb9db62b2cbd6f080c1" }
-sio = { git = "https://github.com/ulagbulag/sio.git", rev = "45f33abe0d0ce624ce56a95cbe1d5ff55c4fdb67" }
+sio = { git = "https://github.com/ulagbulag/sio-rs.git", rev = "45f33abe0d0ce624ce56a95cbe1d5ff55c4fdb67" }
