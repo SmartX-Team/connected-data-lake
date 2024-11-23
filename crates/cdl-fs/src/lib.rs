@@ -56,7 +56,16 @@ pub struct CdlFS {
 
 impl CdlFS {
     #[inline]
-    pub fn path(&self) -> String {
+    pub const fn catalog(&self) -> &DatasetCatalog {
+        &self.catalog
+    }
+
+    pub fn dataset_uri(&self) -> String {
+        self.path.dataset.to_uri(DIR_ROOTFS)
+    }
+
+    #[inline]
+    pub fn global_path(&self) -> String {
         self.path.to_string()
     }
 

@@ -1,4 +1,4 @@
-use std::{future::Future, sync::OnceLock};
+use std::{collections::HashMap, future::Future, sync::OnceLock};
 
 use anyhow::{anyhow, Context, Error, Result};
 use arrow::{array::RecordBatch, compute::concat_batches, pyarrow::PyArrowType};
@@ -59,8 +59,13 @@ pub struct CdlFS(::cdl_fs::CdlFS);
 #[pymethods]
 impl CdlFS {
     #[getter]
-    fn path(&self) -> String {
-        self.0.path()
+    fn dataset_uri(&self) -> String {
+        self.0.dataset_uri()
+    }
+
+    #[getter]
+    fn global_path(&self) -> String {
+        self.0.global_path()
     }
 
     #[pyo3(signature = (
@@ -136,6 +141,13 @@ impl CdlFS {
         )
         .map_err(Into::into)
     }
+
+    #[pyo3(signature = (
+        /,
+    ))]
+    fn storage_options(&self) -> PyResult<HashMap<String, String>> {
+        self.0.catalog().storage_options(true).map_err(Into::into)
+    }
 }
 
 async fn collect_batches(
@@ -164,7 +176,7 @@ where
 #[pymodule]
 fn _internal(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Init
-    ::ark_core::tracer::init_once();
+    ::cdl_k8s_core::otel::init_once();
     debug!("Welcome to Connected Data Lake!");
 
     // Metadata

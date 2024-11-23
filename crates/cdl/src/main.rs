@@ -9,7 +9,7 @@ use tracing::{debug, error, info};
 async fn main() {
     let args = self::args::Args::parse();
 
-    ::ark_core::tracer::init_once();
+    ::cdl_k8s_core::otel::init_once();
     info!("Welcome to Connected Data Lake!");
 
     match try_main(args).await {

@@ -1,4 +1,10 @@
+import lance
 import pyarrow as pa
+
+try:
+    import lance.torch.data
+except ImportError:
+    pass
 
 try:
     import pandas as pd
@@ -38,27 +44,34 @@ class CdlFS:
     def sql_as_pandas(
         self,
         sql: str,
-    ):
+    ) -> pd.DataFrame:
         df: pd.DataFrame = self.sql(sql).to_pandas()
         return df
 
     def sql_as_polars(
         self,
         sql: str,
-    ):
+    ) -> pl.DataFrame:
         df: pl.DataFrame = pl.from_arrow(self.sql(sql))  # type: ignore
         return df
+
+    def to_lance_dataset(self, **kwargs) -> lance.LanceDataset:
+        return lance.LanceDataset(
+            storage_options=self._impl.storage_options(),
+            uri=self._impl.dataset_uri,
+            **kwargs,
+        )
 
     def to_torch_dataset(
         self,
         batch_size: int = 1,
-    ):
-        from cdlake.dataset import CdlTorchDataset
-        return CdlTorchDataset(
-            batch=self.read_dir_all(),
+        **kwargs,
+    ) -> lance.torch.data.LanceDataset:
+        return lance.torch.data.LanceDataset(
             batch_size=batch_size,
-            fs=self._impl,
+            dataset=self.to_lance_dataset(),
+            **kwargs,
         )
 
     def __repr__(self) -> str:
-        return f'CdlFS({self._impl.path!r})'
+        return f'CdlFS({self._impl.global_path!r})'

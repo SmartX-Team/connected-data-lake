@@ -67,11 +67,13 @@ openapi = [
 # OpenTelemetry
 opentelemetry = ["dep:opentelemetry", "dep:tracing", "dep:tracing-subscriber"]
 opentelemetry-all = [
+    "opentelemetry",
     "opentelemetry-logs",
     "opentelemetry-metrics",
     "opentelemetry-trace",
 ]
 opentelemetry-otlp = [
+    "opentelemetry",
     "dep:opentelemetry-appender-tracing",
     "dep:opentelemetry_sdk",
     "dep:opentelemetry-otlp",

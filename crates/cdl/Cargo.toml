@@ -28,9 +28,9 @@ gpu-nvidia = ["cdl-fs/gpu-nvidia"]
 [dependencies]
 cdl-catalog = { path = "../cdl-catalog" }
 cdl-fs = { path = "../cdl-fs" }
+cdl-k8s-core = { path = "../cdl-k8s-core", features = ["opentelemetry-all"] }
 
 anyhow = { workspace = true }
-ark-core = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }

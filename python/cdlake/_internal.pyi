@@ -4,7 +4,8 @@ import pyarrow as pa
 
 
 class CdlFS:
-    path: str
+    dataset_uri: str
+    global_path: str
 
     def copy_to(self, dst: str, /) -> None: ...
 
@@ -15,6 +16,8 @@ class CdlFS:
     def read_files(self, /, condition: str) -> list[bytes]: ...
 
     def sql(self, sql: str, /) -> pa.RecordBatch: ...
+
+    def storage_options(self) -> dict[str, str]: ...
 
 
 class Cdl:

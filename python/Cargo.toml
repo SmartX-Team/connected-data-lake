@@ -27,9 +27,11 @@ doc = false
 [dependencies]
 cdl-catalog = { path = "../crates/cdl-catalog", features = ["serde"] }
 cdl-fs = { path = "../crates/cdl-fs" }
+cdl-k8s-core = { path = "../crates/cdl-k8s-core", features = [
+    "opentelemetry-all",
+] }
 
 anyhow = { workspace = true }
-ark-core = { workspace = true }
 arrow = { workspace = true, features = ["pyarrow"] }
 clap = { workspace = true }
 datafusion = { workspace = true }
@@ -42,7 +44,7 @@ pyo3 = { workspace = true, features = [
     "experimental-async",
     "extension-module",
     "macros",
-    "nightly",
+    # "nightly",
     "serde",
 ] }
 tokio = { workspace = true, features = ["full"] }

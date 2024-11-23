@@ -85,7 +85,7 @@ fn init_once_opentelemetry(export: bool) {
     {
         use opentelemetry::trace::TracerProvider;
 
-        let name = env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "ark-core".into());
+        let name = env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "cdl-k8s-core".into());
 
         let exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
