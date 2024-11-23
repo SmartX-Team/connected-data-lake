@@ -37,6 +37,10 @@ rustls-tls = [
     "prometheus-http-query/rustls-tls",
 ]
 
+[package.metadata.docs.rs]
+features = ["openssl-tls", "rustls-tls"]
+no-default-features = true
+
 [dependencies]
 cdl-k8s-core = { workspace = true, features = [
     "env",

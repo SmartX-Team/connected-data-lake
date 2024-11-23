@@ -108,6 +108,19 @@ default-tls = ["rustls-tls"]
 openssl-tls = ["kube?/openssl-tls"]
 rustls-tls = ["kube?/rustls-tls"]
 
+[package.metadata.docs.rs]
+features = [
+    "env",
+    "k8s-cluster-domain",
+    "k8s-cluster-name",
+    "k8s-operator",
+    "openssl-tls",
+    "opentelemetry-all",
+    "opentelemetry-otlp",
+    "rustls-tls",
+]
+no-default-features = true
+
 [dependencies]
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }

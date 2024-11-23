@@ -23,6 +23,10 @@ workspace = true
 default = []
 k8s = ["dep:kube", "dep:serde_json"]
 
+[package.metadata.docs.rs]
+features = ["k8s"]
+no-default-features = true
+
 [dependencies]
 cdl-k8s-core = { workspace = true, features = ["openapi"] }
 

@@ -23,6 +23,10 @@ workspace = true
 default = []
 serde = ["dep:serde", "url/serde"]
 
+[package.metadata.docs.rs]
+features = ["serde"]
+no-default-features = true
+
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }

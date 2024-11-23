@@ -31,6 +31,10 @@ openssl-tls = [
 ]
 rustls-tls = ["cdl-k8s-core/rustls-tls", "kube/rustls-tls", "minio/rustls-tls"]
 
+[package.metadata.docs.rs]
+features = ["openssl-tls", "rustls-tls"]
+no-default-features = true
+
 [dependencies]
 cdl-k8s-core = { workspace = true, features = ["openapi"] }
 cdl-openapi = { workspace = true, features = ["k8s"] }

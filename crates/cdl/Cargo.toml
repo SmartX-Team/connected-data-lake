@@ -25,6 +25,10 @@ default = []
 # H/W
 gpu-nvidia = ["cdl-fs/gpu-nvidia"]
 
+[package.metadata.docs.rs]
+features = ["gpu-nvidia"]
+no-default-features = true
+
 [dependencies]
 cdl-catalog = { workspace = true }
 cdl-fs = { workspace = true }

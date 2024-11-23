@@ -23,5 +23,9 @@ workspace = true
 default = []
 pyo3 = ["tokio/full"]
 
+[package.metadata.docs.rs]
+features = ["pyo3"]
+no-default-features = true
+
 [dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

@@ -26,6 +26,10 @@ serde = ["dep:serde"]
 # H/W
 gpu-nvidia = ["lance/tensorflow"]
 
+[package.metadata.docs.rs]
+features = ["gpu-nvidia", "serde"]
+no-default-features = true
+
 [dependencies]
 cdl-catalog = { workspace = true }
 cdl-store = { workspace = true }
