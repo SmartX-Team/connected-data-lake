@@ -1,0 +1,46 @@
+[package]
+name = "cdl-benchmark"
+
+authors = { workspace = true }
+description = { workspace = true }
+documentation = "https://docs.rs/cdl-benchmark"
+edition = { workspace = true }
+include = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lints]
+workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["default-tls"]
+
+# TLS
+default-tls = ["rustls-tls"]
+openssl-tls = ["kube/openssl-tls", "prometheus-http-query/native-tls"]
+rustls-tls = ["kube/rustls-tls", "prometheus-http-query/rustls-tls"]
+
+[dependencies]
+cdl-k8s-core = { workspace = true, features = ["opentelemetry-all"] }
+cdl-openapi = { workspace = true, features = ["k8s"] }
+
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+clap = { workspace = true }
+futures = { workspace = true }
+k8s-openapi = { workspace = true }
+kube = { workspace = true, features = ["client", "runtime", "ws"] }
+maplit = { workspace = true }
+prometheus-http-query = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+cdl-fuse = { workspace = true }

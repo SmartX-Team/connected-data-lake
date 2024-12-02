@@ -1,6 +1,6 @@
 [workspace]
 default-members = ["crates/cdl"]
-members = ["crates/*", "python"]
+members = ["benchmark", "crates/*", "python"]
 exclude = ["crates/target"]
 resolver = "2"
 
@@ -23,6 +23,7 @@ blocks_in_conditions = "allow" # opentelemetry tracing macro would be noisy
 
 [workspace.dependencies]
 cdl = { version = "0.1.4", path = "crates/cdl", default-features = false }
+cdl-benchmark = { version = "0.1.4", path = "benchmark", default-features = false }
 cdl-catalog = { version = "0.1.4", path = "crates/cdl-catalog", default-features = false }
 cdl-core = { version = "0.1.4", path = "crates/cdl-core", default-features = false }
 cdl-fs = { version = "0.1.4", path = "crates/cdl-fs", default-features = false }

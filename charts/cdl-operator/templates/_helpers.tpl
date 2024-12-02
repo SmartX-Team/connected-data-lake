@@ -66,5 +66,5 @@ Create the name of the service account to use
 Create the name of the clusterrole to use
 */}}
 {{- define "cdl-operator.clusterRoleName" -}}
-{{- printf "dash:cdl-operator:%s:%s" .Release.Namespace .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- printf "cdl:cdl-operator:%s:%s" .Release.Namespace .Release.Name | trunc 63 | trimSuffix "-" }}
 {{- end }}

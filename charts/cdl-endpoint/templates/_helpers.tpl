@@ -66,7 +66,7 @@ Create the name of the service account to use
 Create the name of the clusterrole to use
 */}}
 {{- define "cdl-endpoint.clusterRoleName" -}}
-{{- printf "dash:cdl-endpoint:%s:%s" .Release.Namespace .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- printf "cdl:cdl-endpoint:%s:%s" .Release.Namespace .Release.Name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
@@ -80,5 +80,5 @@ Create the name of the ingressclass to use
 Create the name of the ingress controller to use
 */}}
 {{- define "cdl-endpoint.ingressControllerName" -}}
-{{- default (printf "k8s.io/dash/%s/%s" .Release.Name .Release.Namespace) .Values.ingressControllerNameOverride | trunc 63 | trimSuffix "-" }}
+{{- default (printf "k8s.io/cdl/%s/%s" .Release.Name .Release.Namespace) .Values.ingressControllerNameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
