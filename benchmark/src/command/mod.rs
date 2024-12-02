@@ -3,7 +3,7 @@ pub mod create;
 use anyhow::Result;
 use clap::Subcommand;
 
-use crate::{args::CommonArgs, ins::Instruction};
+use crate::ins::Instruction;
 
 #[derive(Clone, Debug, PartialEq, Subcommand)]
 pub enum Command {
@@ -11,12 +11,9 @@ pub enum Command {
 }
 
 impl Command {
-    pub(super) async fn to_instructions(
-        self,
-        common: CommonArgs,
-    ) -> Result<Vec<Box<dyn Instruction>>> {
+    pub(super) async fn to_instructions(self) -> Result<Vec<Box<dyn Instruction>>> {
         match self {
-            Self::Create(args) => args.to_instructions(common).await,
+            Self::Create(args) => args.to_instructions().await,
         }
     }
 }

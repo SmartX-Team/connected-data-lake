@@ -33,14 +33,13 @@ cdl-openapi = { workspace = true, features = ["k8s"] }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+chrono = { workspace = true }
 clap = { workspace = true }
 futures = { workspace = true }
 k8s-openapi = { workspace = true }
 kube = { workspace = true, features = ["client", "runtime", "ws"] }
 maplit = { workspace = true }
 prometheus-http-query = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-cdl-fuse = { workspace = true }

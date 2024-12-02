@@ -46,8 +46,8 @@ RUN \
     # Create an output directory
     mkdir /out \
     # Build
-    && cargo build --package "${PACKAGE}" --release \
-    && mv "./target/release/${PACKAGE}" /out \
+    && cargo build --package "${PACKAGE}" --package 'cdl-benchmark' --release \
+    && mv "./target/release/${PACKAGE}" './target/release/cdl-benchmark' /out \
     && mv ./LICENSE /LICENSE
 
 # Copy executable files
