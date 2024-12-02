@@ -133,7 +133,14 @@ impl super::Instruction for Instruction {
             .collect::<FuturesUnordered<_>>()
             .try_for_each_concurrent(args.num_threads, |namespace| async {
                 api.delete(namespace, &dp).await?;
-                sleep(Duration::from_millis(args.check_interval_ms)).await;
+
+                loop {
+                    let object = api.get_metadata_opt(namespace).await?;
+                    if object.is_none() {
+                        break;
+                    }
+                    sleep(Duration::from_millis(args.check_interval_ms)).await;
+                }
                 Ok::<_, Error>(())
             })
             .await
