@@ -145,6 +145,23 @@ impl super::Instruction for Instruction {
                 sleep(Duration::from_millis(args.apply_interval_ms)).await;
                 Ok::<_, Error>(())
             })
+            .await?;
+
+        items
+            .iter()
+            .map(|x| async move { Ok(x) })
+            .collect::<FuturesUnordered<_>>()
+            .try_for_each_concurrent(args.num_threads, |(namespace, name)| async {
+                let api = Api::<ModelClaimCrd>::namespaced(kube.clone(), namespace);
+                loop {
+                    let object = api.get_metadata_opt(name).await?;
+                    if object.is_none() {
+                        break;
+                    }
+                    sleep(Duration::from_millis(args.apply_interval_ms)).await;
+                }
+                Ok::<_, Error>(())
+            })
             .await
     }
 }

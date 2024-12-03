@@ -144,7 +144,6 @@ impl super::Instruction for Instruction {
             propagation_policy: Some(PropagationPolicy::Foreground),
             ..Default::default()
         };
-
         namespaces
             .iter()
             .map(|x| async move { Ok(x) })
