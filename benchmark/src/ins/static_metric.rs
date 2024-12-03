@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use kube::Client;
 use serde_json::Value;
-use tracing::{instrument, Level};
+use tracing::{info, instrument, Level};
 
 use crate::args::CommonArgs;
 
@@ -19,6 +19,7 @@ impl super::Instruction for Instruction {
     #[instrument(skip_all, err(level = Level::ERROR))]
     async fn apply(&self, _kube: &Client, _args: &CommonArgs, metrics: &mut Metrics) -> Result<()> {
         let Self { key, value } = self.clone();
+        info!("static_metric: {key}={value:?}");
         metrics.write(key.into(), value);
         Ok(())
     }

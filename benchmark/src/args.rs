@@ -55,11 +55,11 @@ impl Args {
 #[derive(Clone, Debug, PartialEq, Parser)]
 pub struct CommonArgs {
     #[arg(long, default_value_t = 1000)]
-    pub check_interval_ms: u64,
+    pub apply_interval_ms: u64,
 
     #[arg(long)]
     pub connected: bool,
 
-    #[arg(long, default_value_t = 16)]
+    #[arg(long, default_value_t = 20)]
     pub num_threads: usize,
 }

@@ -20,13 +20,13 @@ use kube::{
 };
 use maplit::btreemap;
 use tokio::time::sleep;
-use tracing::{instrument, Level};
+use tracing::{info, instrument, Level};
 
 use crate::args::CommonArgs;
 
 use super::Metrics;
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Instruction {
     pub num_k: usize,
 }
@@ -35,6 +35,9 @@ pub struct Instruction {
 impl super::Instruction for Instruction {
     #[instrument(skip_all, err(level = Level::ERROR))]
     async fn apply(&self, kube: &Client, args: &CommonArgs, _metrics: &mut Metrics) -> Result<()> {
+        let Self { num_k } = *self;
+        info!("create_datasets: create {num_k}");
+
         let namespaces = {
             let api = Api::<Namespace>::all(kube.clone());
             let lp = ListParams {
@@ -49,7 +52,7 @@ impl super::Instruction for Instruction {
                 .cycle()
         };
 
-        let objects: Vec<_> = (0..self.num_k)
+        let objects: Vec<_> = (0..num_k)
             .map(|k| format!("cdl-benchmark-dataset-{k:07}"))
             .zip(namespaces)
             .map(|(name, namespace)| ModelClaimCrd {
@@ -75,14 +78,21 @@ impl super::Instruction for Instruction {
             .collect();
 
         let pp = PostParams::default();
+        for object in &objects {
+            let api = Api::namespaced(kube.clone(), &object.namespace().unwrap());
+            api.create(&pp, object).await?;
+            sleep(Duration::from_millis(
+                args.apply_interval_ms / args.num_threads as u64,
+            ))
+            .await;
+        }
+
         stream::iter(objects.iter().map(|x| Ok(x)))
             .try_for_each_concurrent(args.num_threads, |object| async {
                 let api = Api::namespaced(kube.clone(), &object.namespace().unwrap());
-                api.create(&pp, object).await?;
-
                 let name = object.name_any();
                 loop {
-                    let object = api.get(&name).await?;
+                    let object: ModelClaimCrd = api.get(&name).await?;
                     if object
                         .status
                         .as_ref()
@@ -91,7 +101,7 @@ impl super::Instruction for Instruction {
                     {
                         break;
                     }
-                    sleep(Duration::from_millis(args.check_interval_ms)).await;
+                    sleep(Duration::from_millis(args.apply_interval_ms)).await;
                 }
                 Ok::<_, Error>(())
             })
@@ -100,6 +110,9 @@ impl super::Instruction for Instruction {
 
     #[instrument(skip_all, err(level = Level::ERROR))]
     async fn delete(&self, kube: &Client, args: &CommonArgs, _metrics: &mut Metrics) -> Result<()> {
+        let Self { num_k } = *self;
+        info!("create_datasets: delete {num_k}");
+
         let items: Vec<_> = {
             let api = Api::<ModelClaimCrd>::all(kube.clone());
             let lp = ListParams {
@@ -129,7 +142,7 @@ impl super::Instruction for Instruction {
             .try_for_each_concurrent(args.num_threads, |(namespace, name)| async {
                 let api = Api::<ModelClaimCrd>::namespaced(kube.clone(), namespace);
                 api.delete(name, &dp).await?;
-                sleep(Duration::from_millis(args.check_interval_ms)).await;
+                sleep(Duration::from_millis(args.apply_interval_ms)).await;
                 Ok::<_, Error>(())
             })
             .await

@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use chrono::Utc;
 use kube::Client;
-use tracing::{instrument, Level};
+use tracing::{info, instrument, Level};
 
 use crate::args::CommonArgs;
 
@@ -18,6 +18,7 @@ impl super::Instruction for Instruction {
     #[instrument(skip_all, err(level = Level::ERROR))]
     async fn apply(&self, _kube: &Client, _args: &CommonArgs, metrics: &mut Metrics) -> Result<()> {
         let Self { label } = self;
+        info!("elapsed_time: {label}_timestamp_begin");
         metrics.write(
             format!("{label}_timestamp_begin"),
             Utc::now().timestamp_micros(),
@@ -33,6 +34,7 @@ impl super::Instruction for Instruction {
         metrics: &mut Metrics,
     ) -> Result<()> {
         let Self { label } = self;
+        info!("elapsed_time: {label}_timestamp_end");
         metrics.write(
             format!("{label}_timestamp_end"),
             Utc::now().timestamp_micros(),
