@@ -14,6 +14,16 @@ entries:
   cdl-endpoint:
   - apiVersion: v2
     appVersion: latest-devel
+    created: "2024-12-23T09:05:06.485900597Z"
+    description: Convenient Connected Data Lake endpoint instance deployment tool
+    digest: 20473fbe2fca45f01408e5e961e1774e12867110cebc62b9d273bd4aaf4fb2fa
+    name: cdl-endpoint
+    type: application
+    urls:
+    - https://github.com/SmartX-Team/connected-data-lake/releases/download/cdl-endpoint-0.1.6/cdl-endpoint-0.1.6.tgz
+    version: 0.1.6
+  - apiVersion: v2
+    appVersion: latest-devel
     created: "2024-11-22T15:43:00.097506486Z"
     description: Convenient Connected Data Lake endpoint instance deployment tool
     digest: 3eb7216e6417c323e788a56904a54d194d8ed139fffee803fa0f7e2b18570857
@@ -23,6 +33,16 @@ entries:
     - https://github.com/SmartX-Team/connected-data-lake/releases/download/cdl-endpoint-0.1.5/cdl-endpoint-0.1.5.tgz
     version: 0.1.5
   cdl-operator:
+  - apiVersion: v2
+    appVersion: latest-devel
+    created: "2024-12-23T09:05:06.598405714Z"
+    description: Convenient Connected Data Lake operator deployment tool
+    digest: 5cf61fbb68031e789e18d8d4e0acd522eb52ae3f1e9f69a17030d62c35987e2a
+    name: cdl-operator
+    type: application
+    urls:
+    - https://github.com/SmartX-Team/connected-data-lake/releases/download/cdl-operator-0.1.2/cdl-operator-0.1.2.tgz
+    version: 0.1.2
   - apiVersion: v2
     appVersion: latest-devel
     created: "2024-11-22T16:12:20.795424985Z"
@@ -54,4 +74,4 @@ entries:
     urls:
     - https://github.com/SmartX-Team/connected-data-lake/releases/download/data-pond-0.1.5/data-pond-0.1.5.tgz
     version: 0.1.5
-generated: "2024-11-22T16:12:20.795441135Z"
+generated: "2024-12-23T09:05:06.598443184Z"
