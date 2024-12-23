@@ -19,7 +19,7 @@ use crate::model_storage::ModelStorageKind;
         shortname = "mc",
         namespaced,
         printcolumn = r#"{
-            "name": "sto`rage",
+            "name": "storage",
             "type": "string",
             "description": "attached storage name",
             "jsonPath": ".spec.storageName"
