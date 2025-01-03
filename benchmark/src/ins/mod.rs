@@ -1,34 +1,40 @@
+// pub mod branch;
+pub mod checkout_context;
 pub mod create_datasets;
 pub mod create_ponds;
+pub mod create_syncs;
 pub mod elapsed_time;
 pub mod static_metric;
+
+use std::{mem, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
 use kube::Client;
 use serde_json::{Map, Value};
+use tokio::sync::Mutex;
 
 use crate::args::CommonArgs;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Metrics {
-    inner: Map<String, Value>,
+    inner: Arc<Mutex<Map<String, Value>>>,
 }
 
 impl Metrics {
-    pub fn write(&mut self, key: String, value: impl Into<Value>) {
-        self.inner.insert(key, value.into());
+    pub async fn write(&self, key: String, value: impl Into<Value>) {
+        self.inner.lock().await.insert(key, value.into());
     }
 }
 
 #[async_trait]
 pub trait Instruction
 where
-    Self: Send,
+    Self: Send + Sync,
 {
-    async fn apply(&self, kube: &Client, args: &CommonArgs, metrics: &mut Metrics) -> Result<()>;
+    async fn apply(&self, stack: &mut InstructionStack) -> Result<()>;
 
-    async fn delete(&self, kube: &Client, args: &CommonArgs, metrics: &mut Metrics) -> Result<()>;
+    async fn delete(&self, stack: &mut InstructionStack) -> Result<()>;
 }
 
 pub struct InstructionStack {
@@ -48,21 +54,35 @@ impl InstructionStack {
         })
     }
 
-    pub async fn push(&mut self, ins: Box<dyn Instruction>) -> Result<()> {
+    // async fn branch(&self) -> Self {
+    //     Self {
+    //         args: self.args.clone(),
+    //         inner: Vec::default(),
+    //         kube: self.kube.clone(),
+    //         metrics: self.metrics.clone(),
+    //     }
+    // }
+
+    async fn push(&mut self, ins: Box<dyn Instruction>) -> Result<()> {
+        let result = ins.apply(self).await;
         self.inner.push(ins);
-        self.inner
-            .last()
-            .unwrap()
-            .apply(&self.kube, &self.args, &mut self.metrics)
-            .await?;
+        result
+    }
+
+    pub async fn run(&mut self, prog: Vec<Box<dyn Instruction>>) -> Result<()> {
+        for ins in prog {
+            self.push(ins).await?;
+        }
         Ok(())
     }
 
     pub async fn cleanup(mut self) -> Result<Value> {
-        for ins in self.inner.into_iter().rev() {
-            ins.delete(&self.kube, &self.args, &mut self.metrics)
-                .await?;
+        let mut ins = Vec::default();
+        mem::swap(&mut ins, &mut self.inner);
+
+        for ins in ins.into_iter().rev() {
+            ins.delete(&mut self).await?;
         }
-        Ok(Value::Object(self.metrics.inner))
+        Ok(Value::Object(self.metrics.inner.lock().await.clone()))
     }
 }

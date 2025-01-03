@@ -27,7 +27,7 @@ Cargo.lock
 **/*.csv
 **/cache
 **/dst
-**/outputs
+**/outputs*
 /logs
 /rootfs
 /test

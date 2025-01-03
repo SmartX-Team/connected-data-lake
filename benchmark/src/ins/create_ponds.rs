@@ -1,10 +1,12 @@
-use std::time::Duration;
+use std::{net::Ipv4Addr, time::Duration};
 
 use anyhow::{Error, Result};
 use async_trait::async_trait;
 use cdl_openapi::model_storage::{
     object::{
-        ModelStorageObjectOwnedReplicationSpec, ModelStorageObjectOwnedSpec, ModelStorageObjectSpec,
+        ModelStorageObjectBorrowedSpec, ModelStorageObjectOwnedExternalServiceSpec,
+        ModelStorageObjectOwnedReplicationSpec, ModelStorageObjectOwnedSpec,
+        ModelStorageObjectRefSpec, ModelStorageObjectSpec,
     },
     ModelStorageCrd, ModelStorageKindSpec, ModelStorageSpec, ModelStorageState,
 };
@@ -13,47 +15,65 @@ use futures::{
     TryStreamExt,
 };
 use k8s_openapi::{
-    api::core::v1::{Namespace, ResourceRequirements},
+    api::core::v1::{Namespace, ResourceRequirements, Secret},
     apimachinery::pkg::api::resource::Quantity,
 };
 use kube::{
     api::{DeleteParams, ObjectMeta, PostParams, PropagationPolicy},
-    Api, Client, ResourceExt,
+    Api, ResourceExt,
 };
 use maplit::btreemap;
 use tokio::time::sleep;
 use tracing::{info, instrument, Level};
 
-use crate::args::CommonArgs;
+use super::InstructionStack;
 
-use super::Metrics;
-
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Instruction {
+    pub address: Option<Ipv4Addr>,
+    pub name: Option<String>,
     pub num_k: usize,
 }
 
 #[async_trait]
 impl super::Instruction for Instruction {
     #[instrument(skip_all, err(level = Level::ERROR))]
-    async fn apply(&self, kube: &Client, args: &CommonArgs, _metrics: &mut Metrics) -> Result<()> {
-        let Self { num_k } = *self;
+    async fn apply(&self, stack: &mut InstructionStack) -> Result<()> {
+        let Self {
+            address,
+            name,
+            num_k,
+        } = self.clone();
+        let InstructionStack { kube, args, .. } = stack;
         info!("create_ponds: create {num_k}");
 
         let objects: Vec<_> = (0..num_k)
             .map(|k| format!("cdl-benchmark-{k:07}"))
             .map(|namespace| ModelStorageCrd {
                 metadata: ObjectMeta {
-                    name: Some("object-storage-pool".into()),
+                    name: Some(name.clone().unwrap_or_else(|| "object-storage-pool".into())),
                     namespace: Some(namespace),
                     labels: Some(btreemap! {
+                        "ark.ulagbulag.io/is-external".into() => "true".into(),
                         "cdl.ulagbulag.io/benchmark".into() => "true".into(),
                     }),
                     ..Default::default()
                 },
                 spec: ModelStorageSpec {
-                    kind: ModelStorageKindSpec::ObjectStorage(ModelStorageObjectSpec::Owned(
-                        ModelStorageObjectOwnedSpec {
+                    kind: ModelStorageKindSpec::ObjectStorage(match address.zip(name.as_ref()) {
+                        Some((remote, _)) => {
+                            ModelStorageObjectSpec::Borrowed(ModelStorageObjectBorrowedSpec {
+                                reference: ModelStorageObjectRefSpec {
+                                    endpoint: format!("http://{remote}").parse().unwrap(),
+                                    secret_ref: Default::default(),
+                                },
+                            })
+                        }
+                        None => ModelStorageObjectSpec::Owned(ModelStorageObjectOwnedSpec {
+                            minio_external_service: ModelStorageObjectOwnedExternalServiceSpec {
+                                ip: address,
+                                ..Default::default()
+                            },
                             replication: ModelStorageObjectOwnedReplicationSpec {
                                 resources: ResourceRequirements {
                                     limits: Some(btreemap! {
@@ -69,8 +89,8 @@ impl super::Instruction for Instruction {
                                 total_volumes_per_node: 1,
                             },
                             ..Default::default()
-                        },
-                    )),
+                        }),
+                    }),
                     default: true,
                 },
                 status: None,
@@ -78,27 +98,52 @@ impl super::Instruction for Instruction {
             .collect();
 
         let api_ns = Api::all(kube.clone());
+        let is_remote = address.zip(name.as_ref()).is_some();
         let pp = PostParams::default();
         for object in &objects {
-            let ns = Namespace {
-                metadata: ObjectMeta {
-                    name: object.namespace(),
-                    labels: Some(btreemap! {
-                        "cdl.ulagbulag.io/benchmark".into() => "true".into(),
+            let namespace = object.namespace().unwrap();
+            if !is_remote {
+                // create a namespace
+                let ns = Namespace {
+                    metadata: ObjectMeta {
+                        name: Some(namespace.clone()),
+                        labels: Some(btreemap! {
+                            "cdl.ulagbulag.io/benchmark".into() => "true".into(),
+                        }),
+                        ..Default::default()
+                    },
+                    spec: None,
+                    status: None,
+                };
+                api_ns.create(&pp, &ns).await?;
+
+                loop {
+                    if api_ns.get_metadata_opt(&namespace).await?.is_some() {
+                        break;
+                    }
+                    sleep(Duration::from_millis(args.apply_interval_ms)).await;
+                }
+
+                // create a static secret
+                let api = Api::namespaced(kube.clone(), &namespace);
+                let secret = Secret {
+                    metadata: ObjectMeta {
+                        name: Some("object-storage-user-0".into()),
+                        namespace: Some(namespace.clone()),
+                        ..Default::default()
+                    },
+                    immutable: Some(true),
+                    string_data: Some(btreemap! {
+                        "CONSOLE_ACCESS_KEY".into() => "abcdefgh12345678".into(),
+                        "CONSOLE_SECRET_KEY".into() => "abcdefgh12345678abcdefgh12345678".into(),
                     }),
                     ..Default::default()
-                },
-                spec: None,
-                status: None,
-            };
-            api_ns.create(&pp, &ns).await?;
-
-            let namespace = ns.name_any();
-            loop {
-                if api_ns.get_metadata_opt(&namespace).await?.is_some() {
-                    break;
-                }
-                sleep(Duration::from_millis(args.apply_interval_ms)).await;
+                };
+                api.create(&pp, &secret).await?;
+                sleep(Duration::from_millis(
+                    args.apply_interval_ms / args.num_threads as u64,
+                ))
+                .await;
             }
 
             let api = Api::namespaced(kube.clone(), &namespace);
@@ -131,11 +176,22 @@ impl super::Instruction for Instruction {
     }
 
     #[instrument(skip_all, err(level = Level::ERROR))]
-    async fn delete(&self, kube: &Client, args: &CommonArgs, _metrics: &mut Metrics) -> Result<()> {
-        let Self { num_k } = *self;
+    async fn delete(&self, stack: &mut InstructionStack) -> Result<()> {
+        let Self {
+            address,
+            name,
+            num_k,
+            ..
+        } = self;
+        let InstructionStack { kube, args, .. } = stack;
         info!("create_ponds: delete {num_k}");
 
-        let namespaces: Vec<_> = (0..num_k)
+        let is_remote = address.zip(name.as_ref()).is_some();
+        if is_remote {
+            return Ok(());
+        }
+
+        let namespaces: Vec<_> = (0..*num_k)
             .map(|k| format!("cdl-benchmark-{k:07}"))
             .collect();
 

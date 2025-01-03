@@ -9,20 +9,15 @@ use cdl_openapi::{
     },
     model_storage::ModelStorageKind,
 };
-use futures::{
-    stream::{self, FuturesUnordered},
-    TryStreamExt,
-};
+use futures::{stream, TryStreamExt};
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{
-    api::{DeleteParams, ListParams, ObjectMeta, PostParams, PropagationPolicy},
-    Api, Client, ResourceExt,
+    api::{ListParams, ObjectMeta, PostParams},
+    Api, ResourceExt,
 };
 use maplit::btreemap;
 use tokio::time::sleep;
 use tracing::{info, instrument, Level};
-
-use crate::args::CommonArgs;
 
 use super::InstructionStack;
 
@@ -37,7 +32,7 @@ impl super::Instruction for Instruction {
     async fn apply(&self, stack: &mut InstructionStack) -> Result<()> {
         let Self { num_k } = *self;
         let InstructionStack { kube, args, .. } = stack;
-        info!("create_datasets: create {num_k}");
+        info!("create_syncs: create {num_k}");
 
         let namespaces = {
             let api = Api::<Namespace>::all(kube.clone());
@@ -113,60 +108,7 @@ impl super::Instruction for Instruction {
     async fn delete(&self, stack: &mut InstructionStack) -> Result<()> {
         let Self { num_k } = *self;
         let InstructionStack { kube, args, .. } = stack;
-        info!("create_datasets: delete {num_k}");
-        delete(kube, args).await
+        info!("create_syncs: delete {num_k}");
+        super::create_datasets::delete(kube, args).await
     }
-}
-
-pub(super) async fn delete(kube: &Client, args: &CommonArgs) -> Result<()> {
-    let items: Vec<_> = {
-        let api = Api::<ModelClaimCrd>::all(kube.clone());
-        let lp = ListParams {
-            label_selector: Some("cdl.ulagbulag.io/benchmark=true".into()),
-            ..Default::default()
-        };
-        api.list_metadata(&lp)
-            .await?
-            .items
-            .into_iter()
-            .filter_map(|item| {
-                let name = item.name_any();
-                let namespace = item.namespace()?;
-                Some((namespace, name))
-            })
-            .collect()
-    };
-
-    let dp = DeleteParams {
-        propagation_policy: Some(PropagationPolicy::Foreground),
-        ..Default::default()
-    };
-    items
-        .iter()
-        .map(|x| async move { Ok(x) })
-        .collect::<FuturesUnordered<_>>()
-        .try_for_each_concurrent(args.num_threads, |(namespace, name)| async {
-            let api = Api::<ModelClaimCrd>::namespaced(kube.clone(), namespace);
-            api.delete(name, &dp).await?;
-            sleep(Duration::from_millis(args.apply_interval_ms)).await;
-            Ok::<_, Error>(())
-        })
-        .await?;
-
-    items
-        .iter()
-        .map(|x| async move { Ok(x) })
-        .collect::<FuturesUnordered<_>>()
-        .try_for_each_concurrent(args.num_threads, |(namespace, name)| async {
-            let api = Api::<ModelClaimCrd>::namespaced(kube.clone(), namespace);
-            loop {
-                let object = api.get_metadata_opt(name).await?;
-                if object.is_none() {
-                    break;
-                }
-                sleep(Duration::from_millis(args.apply_interval_ms)).await;
-            }
-            Ok::<_, Error>(())
-        })
-        .await
 }

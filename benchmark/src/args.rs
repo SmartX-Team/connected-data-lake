@@ -23,16 +23,8 @@ impl Args {
     pub(super) async fn execute(self) -> Result<()> {
         let mut stack = InstructionStack::try_new(self.common).await?;
 
-        let mut error = None;
-        for ins in self.command.to_instructions().await? {
-            match stack.push(ins).await {
-                Ok(()) => continue,
-                Err(e) => {
-                    error = Some(e);
-                    break;
-                }
-            }
-        }
+        let prog = self.command.to_instructions().await?;
+        let result = stack.run(prog).await;
 
         let value = stack.cleanup().await?;
         let path = {
@@ -45,10 +37,7 @@ impl Args {
         };
         fs::write(&path, ::serde_json::to_string_pretty(&value)?).await?;
 
-        match error {
-            None => Ok(()),
-            Some(e) => Err(e),
-        }
+        result
     }
 }
 

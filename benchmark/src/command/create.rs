@@ -38,7 +38,11 @@ impl CreateArgs {
                     key: "num_ponds",
                     value: Value::Number(1usize.into()),
                 }),
-                Box::new(ins::create_ponds::Instruction { num_k: 1 }),
+                Box::new(ins::create_ponds::Instruction {
+                    address: None,
+                    name: None,
+                    num_k: 1,
+                }),
                 Box::new(ins::elapsed_time::Instruction {
                     label: "create_datasets",
                 }),
@@ -56,7 +60,11 @@ impl CreateArgs {
                 Box::new(ins::elapsed_time::Instruction {
                     label: "create_ponds",
                 }),
-                Box::new(ins::create_ponds::Instruction { num_k }),
+                Box::new(ins::create_ponds::Instruction {
+                    address: None,
+                    name: None,
+                    num_k,
+                }),
             ]),
         }
     }
