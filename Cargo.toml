@@ -1,6 +1,6 @@
 [workspace]
 default-members = ["crates/cdl"]
-members = ["benchmark", "crates/*", "python"]
+members = ["benchmark", "crates/*", "contrib/*", "python"]
 exclude = ["crates/target"]
 resolver = "2"
 
@@ -35,6 +35,13 @@ cdl-openapi = { version = "0.1.4", path = "crates/cdl-openapi", default-features
 cdl-python = { version = "0.1.4", path = "python", default-features = false }
 cdl-store = { version = "0.1.4", path = "crates/cdl-store", default-features = false }
 
+cdl-ip-broker = { version = "0.1.4", path = "contrib/cdl-ip-broker", default-features = false }
+cdl-ip-core = { version = "0.1.4", path = "contrib/cdl-ip-core", default-features = false }
+cdl-ip-eth-udp = { version = "0.1.4", path = "contrib/cdl-ip-eth-udp", default-features = false }
+cdl-ip-eth-tcp = { version = "0.1.4", path = "contrib/cdl-ip-eth-tcp", default-features = false }
+cdl-ip-linux-io-uring = { version = "0.1.4", path = "contrib/cdl-ip-linux-io-uring", default-features = false }
+cdl-ip-mem = { version = "0.1.4", path = "contrib/cdl-ip-mem", default-features = false }
+
 anyhow = { version = "1.0", features = ["backtrace"] }
 argon2 = { version = "0.5" }
 arrow = { version = "52", default-features = false, features = [ # depends: lance
@@ -44,6 +51,7 @@ arrow = { version = "52", default-features = false, features = [ # depends: lanc
 
 ] }
 async-trait = { version = "0.1" }
+bitflags = { version = "2.6" }
 byte-unit = { version = "5.1" }
 bytes = { version = "1.8" }
 chrono = { version = "0.4" }
@@ -68,6 +76,7 @@ inflector = { package = "Inflector", version = "0.11" }
 itertools = { version = "0.13" }
 k8s-openapi = { version = "0.23", features = ["schemars", "v1_30"] }
 kube = { version = "0.96", default-features = false }
+io-uring = { version = "0.7", default-features = false }
 lance = { version = "0.20", default-features = false }
 lance-core = { version = "0.20", default-features = false } # depends: lance
 lance-encoding = { version = "0.20", default-features = false } # depends: lance
@@ -76,6 +85,7 @@ lance-table = { version = "0.20", default-features = false } # depends: lance
 libc = { version = "0.2" }
 maplit = { version = "1.0" }
 minio = { version = "0.2.0-alpha", default-features = false }
+nix = { version = "0.29", default-features = false }
 object_store = { version = "0.10" } # depends: lance
 opentelemetry = { version = "0.27" }
 opentelemetry-appender-tracing = { version = "0.27", features = [
@@ -130,3 +140,6 @@ lance-io = { git = "https://github.com/ulagbulag/lance.git", rev = "24f38842d473
 lance-table = { git = "https://github.com/ulagbulag/lance.git", rev = "24f38842d47333925184f9501cd337fe4e2266b5" }
 minio = { git = "https://github.com/ulagbulag/minio-rs.git", rev = "420ac0210f491b9df8ee54995e79386f91cb96a1" }
 sio = { git = "https://github.com/ulagbulag/sio-rs.git", rev = "45f33abe0d0ce624ce56a95cbe1d5ff55c4fdb67" }
+
+# [profile.release]
+# lto = true

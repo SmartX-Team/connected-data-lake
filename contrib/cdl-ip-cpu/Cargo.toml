@@ -1,0 +1,46 @@
+[package]
+name = "cdl-ip-cpu"
+
+authors = { workspace = true }
+description = { workspace = true }
+documentation = "https://docs.rs/cdl-ip-cpu"
+edition = { workspace = true }
+include = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+readme = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lints]
+workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["full"]
+full = ["eth", "fs", "mem"]
+
+eth = ["eth-tcp", "eth-udp"]
+eth-tcp = ["dep:cdl-ip-eth-tcp"]
+eth-udp = ["dep:cdl-ip-eth-udp"]
+fs = ["dep:cdl-ip-linux-io-uring"]
+mem = ["dep:cdl-ip-mem"]
+
+[dependencies]
+cdl-ip-broker = { workspace = true }
+cdl-ip-core = { workspace = true, features = ["local"] }
+cdl-ip-eth-tcp = { workspace = true, optional = true }
+cdl-ip-eth-udp = { workspace = true, optional = true }
+cdl-ip-mem = { workspace = true, optional = true }
+cdl-k8s-core = { workspace = true, features = ["opentelemetry-all"] }
+
+clap = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+cdl-ip-linux-io-uring = { workspace = true, optional = true, features = [
+    "tracing",
+] }
