@@ -4,12 +4,12 @@ use std::{env, ffi::OsStr};
 use opentelemetry_otlp as otlp;
 #[cfg(feature = "opentelemetry-otlp")]
 use opentelemetry_sdk as sdk;
-use tracing::{debug, dispatcher, Subscriber};
+use tracing::{Subscriber, debug, dispatcher};
 use tracing_subscriber::{
-    layer::SubscriberExt, registry::LookupSpan, util::SubscriberInitExt, Layer, Registry,
+    Layer, Registry, layer::SubscriberExt, registry::LookupSpan, util::SubscriberInitExt,
 };
 
-fn init_once_opentelemetry(export: bool) {
+fn init_once_opentelemetry(level: &OsStr, export: bool) {
     #[cfg(feature = "opentelemetry-otlp")]
     use sdk::runtime::Tokio as Runtime;
 
@@ -18,15 +18,15 @@ fn init_once_opentelemetry(export: bool) {
         return;
     }
 
-    // Set default service name
-    {
-        const SERVICE_NAME_KEY: &str = "OTEL_SERVICE_NAME";
-        const SERVICE_NAME_VALUE: &str = env!("CARGO_CRATE_NAME");
+    // // Set default service name
+    // {
+    //     const SERVICE_NAME_KEY: &str = "OTEL_SERVICE_NAME";
+    //     const SERVICE_NAME_VALUE: &str = env!("CARGO_CRATE_NAME");
 
-        if env::var_os(SERVICE_NAME_KEY).is_none() {
-            env::set_var(SERVICE_NAME_KEY, SERVICE_NAME_VALUE);
-        }
-    }
+    //     if env::var_os(SERVICE_NAME_KEY).is_none() {
+    //         env::set_var(SERVICE_NAME_KEY, SERVICE_NAME_VALUE);
+    //     }
+    // }
 
     fn init_layer_env_filter<S>() -> impl Layer<S>
     where
@@ -122,36 +122,23 @@ fn init_once_opentelemetry(export: bool) {
     }
 }
 
+#[inline]
 pub fn init_once() {
     init_once_with_default(true)
 }
 
+#[inline]
 pub fn init_once_with(level: impl AsRef<OsStr>, export: bool) {
-    // Skip init if has been set
-    if dispatcher::has_been_set() {
-        return;
-    }
-
-    // set custom tracing level
-    env::set_var(KEY, level);
-
-    init_once_opentelemetry(export)
+    init_once_opentelemetry(level.as_ref(), export)
 }
 
+#[inline]
 pub fn init_once_with_default(export: bool) {
-    // Skip init if has been set
-    if dispatcher::has_been_set() {
-        return;
-    }
-
-    // set default tracing level
-    if env::var_os(KEY).is_none() {
-        env::set_var(KEY, "INFO");
-    }
-
-    init_once_opentelemetry(export)
+    let level = env::var_os("RUST_LOG").unwrap_or_else(|| "INFO".into());
+    init_once_opentelemetry(&level, export)
 }
 
+#[inline]
 pub fn init_once_with_level_int(level: u8, export: bool) {
     // You can see how many times a particular flag or argument occurred
     // Note, only flags can have multiple occurrences
@@ -162,8 +149,5 @@ pub fn init_once_with_level_int(level: u8, export: bool) {
         3 => "TRACE",
         level => panic!("too high debug level: {level}"),
     };
-    env::set_var("RUST_LOG", debug_level);
-    init_once_with(debug_level, export)
+    init_once_opentelemetry(debug_level.as_ref(), export)
 }
-
-const KEY: &str = "RUST_LOG";
